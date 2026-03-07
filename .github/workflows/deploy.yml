@@ -19,7 +19,7 @@ jobs:
         with:
           switches: -avzr --delete --exclude='.env'
           path: ./
-          remote_path: /var/www/node_api/
+          remote_path: /var/www/betnova_backend/
           remote_host: ${{ secrets.SERVER_HOST }}
           remote_user: ${{ secrets.SERVER_USER }}
           remote_key: ${{ secrets.SERVER_SSH_KEY }}
@@ -53,17 +53,17 @@ jobs:
               echo "✅ PM2 iko tayari"
             fi
 
-            cd /var/www/node_api
+            cd /var/www/betnova_backend
 
             echo "📦 Installing dependencies..."
             npm install --production
 
             echo "🚀 Running npm start..."
             # Angalia kama app inaendeshwa na PM2
-            if pm2 list | grep -q "node_api"
+            if pm2 list | grep -q "betnova_backend"
             then
               echo "🔄 Restarting app via PM2..."
-              pm2 restart node_api
+              pm2 restart betnova_backend
             else
               echo "▶️ Starting app via npm start..."
               # Hapa tunatumia npm start kuanzisha app
@@ -75,7 +75,7 @@ jobs:
               
               # Kisha tumiangalie kwa PM2
               echo "🔄 Registering with PM2..."
-              pm2 start npm --name "node_api" -- start
+              pm2 start npm --name "betnova_backend" -- start
             fi
             
             # Save PM2 configuration
@@ -84,4 +84,4 @@ jobs:
 
             echo "✅ Deployment complete! App inaendeshwa kwenye port 3000 (default)"
             echo "📊 Angalia status: pm2 status"
-            echo "📜 Angalia logs: pm2 logs node_api"
+            echo "📜 Angalia logs: pm2 logs betnova_backend"
