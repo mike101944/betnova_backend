@@ -9,7 +9,8 @@ const {
   generateBookingCode,
   getBetById,
   cancelBet,
-  getUserBetStats
+  getUserBetStats,
+  approveBetController
 } = require('../controllers/bet.controller');
 const { authenticate } = require('../middleware/auth.middleware'); // Only import authenticate
 // Don't import validateBetPlacement yet
@@ -25,5 +26,6 @@ router.get('/:betId', getBetById);
 router.post('/:betId/generate-booking-code', generateBookingCode);
 router.patch('/:betId/cancel', cancelBet);
 router.patch('/:betId/settle', settleBet); // Remove validation temporarily
+router.patch('/:id/approve', approveBetController);
 
 module.exports = router;

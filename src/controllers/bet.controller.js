@@ -159,6 +159,20 @@ const cancelBet = asyncHandler(async (req, res) => {
     data: cancelledBet
   });
 });
+// PATCH /bets/:id/approve
+const approveBetController = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { result } = req.body; // WON or LOST
+
+    const updatedBet = await betService.approveBet(id, result);
+
+    res.json(updatedBet);
+
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
 
 /**
  * Get bet statistics for user
@@ -183,5 +197,6 @@ module.exports = {
   generateBookingCode,
   getBetById,
   cancelBet,
-  getUserBetStats
+  getUserBetStats,
+  approveBetController
 };

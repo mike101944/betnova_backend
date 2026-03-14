@@ -28,6 +28,7 @@ const PORT = process.env.PORT || 5000;
 const allowedOrigins = [
   'http://localhost:5173',   // local dev
   'http://localhost:5174',
+  'http://192.168.213.184:5173/',
 ];
 app.use(helmet());
 app.use(cors({

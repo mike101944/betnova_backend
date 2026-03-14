@@ -290,8 +290,43 @@ const getUserBetStats = async (userId) => {
   };
 };
 
+
+
+// APPROVE / SETTLE BET
+const approveBet = async (betId, resultStatus) => {
+
+  const bet = await betRepository.findById(betId);
+
+  if (!bet) {
+    throw new Error("Bet not found");
+  }
+
+  if (bet.status === "SETTLED") {
+    throw new Error("Bet already settled");
+  }
+
+  // Determine result
+  let result;
+  if (resultStatus === "WON") {
+    result = "WON";
+  } else if (resultStatus === "LOST") {
+    result = "LOST";
+  } else {
+    throw new Error("Invalid result type");
+  }
+
+  // Update bet
+  bet.result = result;
+  bet.status = "SETTLED";
+
+  await bet.save();
+
+  return bet;
+};
+
 module.exports = {
   placeBet,
+  approveBet,
   loadBetByBookingCode,
   settleBet,
   getUserBets,
