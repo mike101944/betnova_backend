@@ -8,6 +8,7 @@ const { authenticate } = require('../middleware/auth.middleware'); // ADD THIS
 router.post('/register', userController.register);
 router.post('/login', userController.login);
 router.post('/refresh', userController.refreshToken);
+router.post('/haraka-webhook', userController.harakaWebhook);
 
 // ADD THIS LINE - all routes below need token
 router.use(authenticate);
@@ -17,5 +18,7 @@ router.post('/deposit', userController.depositMoney);
 router.post('/withdraw', userController.withdrawMoney);
 router.get('/balance', userController.checkBalance);
 router.get('/profile', userController.getProfile);
+router.get('/payment-status/:order_id', userController.checkPaymentStatus);
+
 
 module.exports = router;
