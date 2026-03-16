@@ -63,37 +63,10 @@ const refreshToken = async (req, res) => {
 
 
 
-// const depositMoney = async (req, res) => {
-//   try {
-//     const userId = req.user.id; 
-//     const { amount } = req.body;
-
-//     if (!amount) {
-//       return res.status(400).json({ 
-//         message: 'Amount is required' 
-//       });
-//     }
-
-//     const result = await userService.deposit(userId, amount);
-
-//     res.status(200).json({
-//       message: 'Deposit successful',
-//       data: result
-//     });
-
-//   } catch (error) {
-//     res.status(400).json({ 
-//       message: error.message 
-//     });
-//   }
-// };
 
 
 
-
-
-
-const userRepository = require('../repositories/user.repository'); // Ongeza hii
+const userRepository = require('../repositories/user.repository'); 
 
 const depositMoney = async (req, res) => {
   try {
