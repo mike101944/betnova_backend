@@ -65,6 +65,35 @@ const refreshToken = async (req, res) => {
 
 const userRepository = require('../repositories/user.repository'); 
 
+
+
+
+// ============ MZALENDOPAY CONFIGURATION ============
+const MZALENDO_CONFIG = {
+  publicKey: 'MZ-deb9c0dac868',      
+  secretKey: '2e5151b16416d9899bf4e9e88689f8a87fda76930b45b44a',
+  baseUrl: 'https://mzalendopay.com/apiv2/'
+};
+
+// Helper function to format phone number for MzalendoPay
+function formatPhoneForMzalendo(phone) {
+  // Remove any non-digit characters
+  let cleaned = phone.replace(/\D/g, '');
+  
+  // If starts with 0, replace with 255
+  if (cleaned.startsWith('0')) {
+    cleaned = '255' + cleaned.substring(1);
+  }
+  
+  // If doesn't start with 255, add it
+  if (!cleaned.startsWith('255')) {
+    cleaned = '255' + cleaned;
+  }
+  
+  return cleaned;
+}
+
+// ============ DEPOSIT MONEY WITH MZALENDOPAY ============
 const depositMoney = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -83,37 +112,42 @@ const depositMoney = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    console.log('Initiating deposit for:', user.phone_number, 'amount:', amount);
-    console.log('API Key exists:', !!process.env.HARAKAPAY_API_KEY);
-    console.log('API Key length:', process.env.HARAKAPAY_API_KEY?.length);
+    // Format phone number for MzalendoPay
+    const formattedPhone = formatPhoneForMzalendo(user.phone_number);
+    
+    console.log('=== MZALENDOPAY DEPOSIT ===');
+    console.log('User ID:', userId);
+    console.log('Original phone:', user.phone_number);
+    console.log('Formatted phone:', formattedPhone);
+    console.log('Amount:', amount);
 
-    // Tuma ombi kwa HarakaPay - BILA webhook_url kwenye development
+    // Prepare request body for MzalendoPay
     const requestBody = {
-      phone: user.phone_number,
+      customer_name: user.name || 'Customer',
+      customer_email: user.email || 'customer@example.com',
+      customer_phone: formattedPhone,
       amount: Number(amount),
       description: 'Account deposit'
     };
-    
-    // Ongeza webhook_url tu kama ipo na sio localhost
-    if (process.env.APP_URL && !process.env.APP_URL.includes('localhost')) {
-      requestBody.webhook_url = `${process.env.APP_URL}/api/auth/haraka-webhook`;
-      console.log('Webhook URL added:', requestBody.webhook_url);
-    } else {
-      console.log('No webhook URL sent (development mode)');
-    }
 
-    const response = await axios.post('https://harakapay.net/api/v1/collect', 
+    console.log('Sending to MzalendoPay:', requestBody);
+
+    // Tuma ombi kwa MzalendoPay
+    const response = await axios.post(
+      `${MZALENDO_CONFIG.baseUrl}create_payment.php`,
       requestBody,
       {
         headers: {
-          'X-API-Key': process.env.HARAKAPAY_API_KEY,
+          'X-PUBLIC-KEY': MZALENDO_CONFIG.publicKey,
+          'X-SECRET-KEY': MZALENDO_CONFIG.secretKey,
           'Content-Type': 'application/json'
-        }
+        },
+        timeout: 30000
       }
     );
 
     const result = response.data;
-    console.log('HarakaPay response:', result);
+    console.log('MzalendoPay response:', result);
 
     if (!result.success) {
       return res.status(400).json({
@@ -122,113 +156,119 @@ const depositMoney = async (req, res) => {
       });
     }
 
-
+    // Store pending payment
     if (!global.pendingPayments) {
       global.pendingPayments = new Map();
     }
     
     global.pendingPayments.set(result.order_id, {
       user_id: userId,
-      amount: result.amount,
-      net_amount: result.net_amount,
+      amount: Number(amount),
+      payment_id: result.payment_id,
       status: 'pending',
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      phone: formattedPhone
     });
 
     res.status(200).json({
-      message: 'Check your phone to complete payment. You will receive a prompt.',
+      message: result.message || 'Check your phone to complete payment. You will receive a USSD prompt.',
       data: {
         order_id: result.order_id,
-        amount: result.amount,
-        net_amount: result.net_amount,
-        fee: result.fee,
+        payment_id: result.payment_id,
+        amount: amount,
         status: 'pending'
       }
     });
 
   } catch (error) {
-    console.error('Deposit error details:', {
+    console.error('MzalendoPay deposit error:', {
       message: error.message,
       response: error.response?.data,
-      status: error.response?.status,
-      headers: error.response?.headers
+      status: error.response?.status
     });
-    
-    // Handle specific error
-    if (error.response?.data?.error === 'Invalid webhook_url') {
-      return res.status(400).json({ 
-        message: 'Webhook URL configuration error. Please try again without webhook or contact support.',
-        note: 'Development mode: Try setting APP_URL to empty string in .env'
-      });
-    }
     
     res.status(500).json({ 
       message: error.response?.data?.message || 'Failed to initiate deposit. Please try again.',
-      error: error.response?.data?.error
+      error: error.response?.data?.error || error.message
     });
   }
 };
 
-
-// auth.controller.js - Add this function
+// ============ CHECK PAYMENT STATUS WITH MZALENDOPAY ============
 const checkPaymentStatus = async (req, res) => {
   try {
     const { order_id } = req.params;
     const userId = req.user.id;
 
-    console.log('Checking payment status for order:', order_id);
+    console.log('Checking MzalendoPay payment status for order:', order_id);
 
-    // Call HarakaPay API to check status
-    const response = await axios.get(`https://harakapay.net/api/v1/status/${order_id}`, {
-      headers: {
-        'X-API-Key': process.env.HARAKAPAY_API_KEY
+    // Call MzalendoPay API to check status
+    const response = await axios.get(
+      `${MZALENDO_CONFIG.baseUrl}check_payment_status.php?order_id=${order_id}`,
+      {
+        headers: {
+          'X-PUBLIC-KEY': MZALENDO_CONFIG.publicKey,
+          'X-SECRET-KEY': MZALENDO_CONFIG.secretKey
+        },
+        timeout: 15000
       }
-    });
+    );
 
     const result = response.data;
-    console.log('HarakaPay status response:', result);
+    console.log('MzalendoPay status response:', result);
 
-    if (result.success && result.payment) {
-      const payment = result.payment;
+    if (result.success && result.status === 'SUCCESS') {
+      // Payment completed successfully
+      const pendingPayments = global.pendingPayments || new Map();
+      const pendingPayment = pendingPayments.get(order_id);
       
-      // Kama payment imekamilika, ongeza balance
-      if (payment.status === 'completed') {
-        // Check kama tayari tumeongeza balance
-        const pendingPayments = global.pendingPayments || new Map();
-        const pendingPayment = pendingPayments.get(order_id);
+      if (pendingPayment && !pendingPayment.balance_added) {
+        // Get user
+        const user = await userRepository.findById(userId);
         
-        if (pendingPayment && !pendingPayment.balance_added) {
-          // Get user
-          const user = await userRepository.findById(userId);
+        if (user) {
+          // Add balance
+          const amountToAdd = parseFloat(result.amount) || pendingPayment.amount;
+          const currentBalance = parseFloat(user.balance) || 0;
+          const newBalance = currentBalance + amountToAdd;
           
-          if (user) {
-            // Add balance (use net_amount or amount)
-            const amountToAdd = payment.net_amount || payment.amount;
-            const currentBalance = parseFloat(user.balance) || 0;
-            const newBalance = currentBalance + parseFloat(amountToAdd);
-            
-            // Update balance in database
-            await userRepository.updateBalance(userId, newBalance);
-            
-            // Mark as added
-            pendingPayment.balance_added = true;
-            pendingPayments.set(order_id, pendingPayment);
-            
-            console.log(`Balance updated for user ${userId}: +${amountToAdd}`);
-          }
+          // Update balance in database
+          await userRepository.updateBalance(userId, newBalance);
+          
+          // Mark as added
+          pendingPayment.balance_added = true;
+          pendingPayment.status = 'completed';
+          pendingPayment.transid = result.transid;
+          pendingPayments.set(order_id, pendingPayment);
+          
+          console.log(`✅ Balance updated for user ${userId}: +${amountToAdd}`);
+          console.log(`   Transaction ID: ${result.transid}`);
         }
       }
 
       return res.status(200).json({
         success: true,
-        data: payment
+        status: 'completed',
+        data: {
+          order_id: order_id,
+          transid: result.transid,
+          amount: result.amount
+        }
+      });
+    } else if (result.status === 'FAILED') {
+      return res.status(200).json({
+        success: false,
+        status: 'failed',
+        message: result.message || 'Payment failed'
+      });
+    } else {
+      // Still pending
+      return res.status(200).json({
+        success: false,
+        status: 'pending',
+        message: result.message || 'Payment still pending'
       });
     }
-
-    res.status(200).json({
-      success: false,
-      message: 'Payment not found'
-    });
 
   } catch (error) {
     console.error('Status check error:', {
@@ -239,53 +279,58 @@ const checkPaymentStatus = async (req, res) => {
     
     res.status(400).json({
       success: false,
-      message: error.response?.data?.message || 'Failed to check status'
+      status: 'error',
+      message: error.response?.data?.message || 'Failed to check payment status'
     });
   }
 };
 
-
-// auth.controller.js - Ongeza function hii chini kabla ya module.exports
-
-const harakaWebhook = async (req, res) => {
+// ============ MZALENDOPAY WEBHOOK ============
+const mzalendoWebhook = async (req, res) => {
   try {
-    const {
-      order_id,
-      status,
-      amount,
-      net_amount,
-      fee_amount,
-      completed_at
-    } = req.body;
+    const webhookData = req.body;
+    console.log('🔥 MzalendoPay Webhook received:', webhookData);
 
-    console.log('🔥 HarakaPay Webhook received:', { order_id, status, amount });
+    const { event, order_id, status, amount, transid, timestamp } = webhookData;
 
-    // Verify API key (optional but recommended)
-    const apiKey = req.headers['x-api-key'];
-    if (apiKey !== process.env.HARAKAPAY_API_KEY) {
-      console.log('Invalid API key');
-      return res.sendStatus(200); // Still return 200 to prevent retries
+    // Verify it's a payment success event
+    if (event === 'payment.success' && status === 'SUCCESS') {
+      const pendingPayments = global.pendingPayments || new Map();
+      const pendingPayment = pendingPayments.get(order_id);
+      
+      if (pendingPayment && !pendingPayment.balance_added) {
+        // Get user from pending payment
+        const user = await userRepository.findById(pendingPayment.user_id);
+        
+        if (user) {
+          // Add balance
+          const amountToAdd = parseFloat(amount) || pendingPayment.amount;
+          const currentBalance = parseFloat(user.balance) || 0;
+          const newBalance = currentBalance + amountToAdd;
+          
+          // Update balance in database
+          await userRepository.updateBalance(pendingPayment.user_id, newBalance);
+          
+          // Mark as added
+          pendingPayment.balance_added = true;
+          pendingPayment.status = 'completed';
+          pendingPayment.transid = transid;
+          pendingPayments.set(order_id, pendingPayment);
+          
+          console.log(`✅ [WEBHOOK] Balance updated for user ${pendingPayment.user_id}: +${amountToAdd}`);
+          console.log(`   Transaction ID: ${transid}`);
+        }
+      }
     }
 
-    if (status === 'completed') {
-      console.log(`💰 Payment ${order_id} completed: TZS ${amount}`);
-      
-      // HAPA: Baadaye utaongeza balance kwa user
-      // Kwa sasa, log tu
-      
-      // const user = await userRepository.findByOrderId(order_id);
-      // await userRepository.addBalance(user.id, net_amount || amount);
-    }
-
-    // Always return 200 to HarakaPay
+    // Always return 200 to acknowledge receipt
     res.sendStatus(200);
-
+    
   } catch (error) {
     console.error('Webhook error:', error);
     res.sendStatus(200); // Still return 200 to prevent retries
   }
 };
-
 
 
 
@@ -356,6 +401,6 @@ module.exports = {
   withdrawMoney,
   checkBalance,
   getProfile,
-  harakaWebhook,
+  mzalendoWebhook,
   checkPaymentStatus
 };

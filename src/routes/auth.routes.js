@@ -8,7 +8,7 @@ const { authenticate } = require('../middleware/auth.middleware'); // ADD THIS
 router.post('/register', userController.register);
 router.post('/login', userController.login);
 router.post('/refresh', userController.refreshToken);
-router.post('/haraka-webhook', userController.harakaWebhook);
+router.post('/haraka-webhook', userController.mzalendoWebhook);
 
 // ADD THIS LINE - all routes below need token
 router.use(authenticate);
