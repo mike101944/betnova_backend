@@ -63,9 +63,6 @@ const refreshToken = async (req, res) => {
 
 
 
-
-
-
 const userRepository = require('../repositories/user.repository'); 
 
 const depositMoney = async (req, res) => {
@@ -81,7 +78,7 @@ const depositMoney = async (req, res) => {
 
     // Pata user kutoka database
     const user = await userRepository.findById(userId);
-    
+
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
@@ -125,7 +122,7 @@ const depositMoney = async (req, res) => {
       });
     }
 
-    
+
     if (!global.pendingPayments) {
       global.pendingPayments = new Map();
     }
