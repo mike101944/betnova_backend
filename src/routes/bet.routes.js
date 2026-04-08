@@ -28,10 +28,10 @@ router.get('/user', getUserBets);
 router.get('/stats', getUserBetStats);
 
 // Booking code endpoints (order matters - specific before generic)
-router.get('/check/:bookingCode', checkBookingCodeStatus);     // Check status first
-router.get('/preview/:bookingCode', previewBookingCode);       // Preview without loading
-router.get('/active/:bookingCode', loadActiveBetByCode);       // Load only active bets
-router.get('/load/:bookingCode', loadBetByBookingCode);        // Original - any status
+router.get('/check/:bookingCode', checkBookingCodeStatus);
+router.get('/preview/:bookingCode', previewBookingCode);
+router.get('/active/:bookingCode', loadActiveBetByCode);
+router.get('/load/:bookingCode', loadBetByBookingCode);
 
 // Bet management
 router.get('/:betId', getBetById);

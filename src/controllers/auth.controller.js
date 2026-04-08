@@ -70,8 +70,8 @@ const userRepository = require('../repositories/user.repository');
 
 // ============ MZALENDOPAY CONFIGURATION ============
 const MZALENDO_CONFIG = {
-  publicKey: 'MZ-deb9c0dac868',      
-  secretKey: '2e5151b16416d9899bf4e9e88689f8a87fda76930b45b44a',
+  publicKey: 'MZ-7d0f4bca8263',      
+  secretKey: 'eb90e6575039e029ec1b464a0c33c08005e9afadb6ce7fc6',
   baseUrl: 'https://mzalendopay.com/apiv2/'
 };
 
