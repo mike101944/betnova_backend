@@ -10,20 +10,11 @@ const {
 /**
  * Generate unique booking code
  */
-// const generateBookingCode = () => {
-//   const prefix = 'BET';
-//   const timestamp = Date.now().toString(36).toUpperCase();
-//   const random = Math.random().toString(36).substring(2, 8).toUpperCase();
-//   return `${prefix}${timestamp}${random}`;
-// };
-
 const generateBookingCode = () => {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789';
-  let code = '';
-  for (let i = 0; i < 7; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return code;
+  const prefix = 'BET';
+  const timestamp = Date.now().toString(36).toUpperCase();
+  const random = Math.random().toString(36).substring(2, 8).toUpperCase();
+  return `${prefix}${timestamp}${random}`;
 };
 
 /**
@@ -129,31 +120,24 @@ const placeBet = async (userId, selections, stake) => {
 const loadBetByBookingCode = async (bookingCode) => {
   if (!bookingCode) throw new ValidationError('Booking code is required');
 
-  // Search for active bet ONLY (OPEN + PENDING)
-  const bet = await betRepository.findActiveByBookingCode(bookingCode);
+  // Try to find active bet first
+  let bet = await betRepository.findActiveByBookingCode(bookingCode);
   
   if (!bet) {
-    // Check if bet exists but is not active
-    const existingBet = await betRepository.findByBookingCode(bookingCode);
+    // If not active, check if it exists but is settled/expired
+    bet = await betRepository.findByBookingCode(bookingCode);
     
-    if (!existingBet) {
-      throw new NotFoundError('Booking code not found');
+    if (!bet) {
+      throw new NotFoundError('Bet not found');
     }
     
-    // Provide specific error message based on bet status
-    if (existingBet.status === 'SETTLED') {
-      throw new ValidationError('This bet has already been settled and cannot be loaded');
+    if (bet.status !== 'OPEN' || bet.result !== 'PENDING') {
+      throw new ValidationError('Booking code has expired or already settled');
     }
     
-    if (existingBet.result === 'WON' || existingBet.result === 'LOST') {
-      throw new ValidationError('This bet has already been resolved and cannot be loaded');
+    if (!bet.isBookingCodeActive) {
+      throw new ValidationError('Booking code is no longer active');
     }
-    
-    if (!existingBet.isBookingCodeActive) {
-      throw new ValidationError('This booking code is no longer active');
-    }
-    
-    throw new ValidationError('This bet is no longer available for loading');
   }
 
   // Parse selections from JSON
@@ -339,9 +323,6 @@ const approveBet = async (betId, resultStatus) => {
 
   return bet;
 };
-
-
-
 
 module.exports = {
   placeBet,

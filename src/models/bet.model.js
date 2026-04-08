@@ -5,9 +5,13 @@ const { v4: uuidv4 } = require('uuid');
 
 const Bet = sequelize.define('Bet', {
   id: {
-    type: DataTypes.BIGINT,
+    type: DataTypes.STRING(11), // String to store 11-digit random number
     primaryKey: true,
-    autoIncrement: true
+    allowNull: false,
+    validate: {
+      len: [11, 11], // Exactly 11 characters
+      isNumeric: true // Must be numeric only
+    }
   },
 
   // Booking code (unique identifier for sharing)

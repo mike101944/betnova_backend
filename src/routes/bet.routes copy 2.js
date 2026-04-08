@@ -5,8 +5,6 @@ const {
   placeBet,
   loadBetByBookingCode,
   loadActiveBetByCode,
-  checkBookingCodeStatus,
-  previewBookingCode,
   settleBet,
   getUserBets,
   generateBookingCode,
@@ -15,29 +13,21 @@ const {
   getUserBetStats,
   approveBetController
 } = require('../controllers/bet.controller');
-const { authenticate } = require('../middleware/auth.middleware');
+const { authenticate } = require('../middleware/auth.middleware'); // Only import authenticate
+// Don't import validateBetPlacement yet
 
 // All routes require authentication
 router.use(authenticate);
 
-// Bet placement
-router.post('/', placeBet);
-
-// User bets
+router.post('/', placeBet); // Remove validation temporarily
 router.get('/user', getUserBets);
 router.get('/stats', getUserBetStats);
-
-// Booking code endpoints (order matters - specific before generic)
-router.get('/check/:bookingCode', checkBookingCodeStatus);     // Check status first
-router.get('/preview/:bookingCode', previewBookingCode);       // Preview without loading
-router.get('/active/:bookingCode', loadActiveBetByCode);       // Load only active bets
-router.get('/load/:bookingCode', loadBetByBookingCode);        // Original - any status
-
-// Bet management
+router.get('/load/:bookingCode', loadBetByBookingCode);
+router.get('/active/:bookingCode', loadActiveBetByCode);
 router.get('/:betId', getBetById);
 router.post('/:betId/generate-booking-code', generateBookingCode);
 router.patch('/:betId/cancel', cancelBet);
-router.patch('/:betId/settle', settleBet);
+router.patch('/:betId/settle', settleBet); // Remove validation temporarily
 router.patch('/:id/approve', approveBetController);
 
 module.exports = router;

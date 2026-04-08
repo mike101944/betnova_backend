@@ -3,12 +3,49 @@ const { Bet } = require('../models');
 const { sequelize } = require('../config/database');
 const { Op } = require('sequelize');
 const { NotFoundError } = require('../utils/errors');
+const { generateRandomId } = require('../utils/idGenerator');
+
+
+
+
+
+
+/**
+ * Generate unique random ID for bet
+ */
+const generateUniqueId = async () => {
+  let id;
+  let isUnique = false;
+  let attempts = 0;
+  const maxAttempts = 10;
+  
+  while (!isUnique && attempts < maxAttempts) {
+    id = generateRandomId();
+    const existing = await Bet.findByPk(id);
+    if (!existing) {
+      isUnique = true;
+    }
+    attempts++;
+  }
+  
+  if (!isUnique) {
+    // If we hit max attempts, add timestamp suffix
+    const timestamp = Date.now().toString().slice(-3);
+    id = generateRandomId().slice(0, 8) + timestamp;
+  }
+  
+  return id;
+};
+
+
+
 
 /**
  * Create a new bet
  */
 const create = async (betData) => {
-  return await Bet.create(betData);
+  const id = await generateUniqueId();
+  return await Bet.create({ id, ...betData });
 };
 
 /**
@@ -30,6 +67,20 @@ const findByBookingCode = async (bookingCode) => {
 /**
  * Find active bet by booking code (OPEN and PENDING)
  */
+// const findActiveByBookingCode = async (bookingCode) => {
+//   return await Bet.findOne({
+//     where: {
+//       bookingCode,
+//       status: 'OPEN',
+//       result: 'PENDING',
+//       isBookingCodeActive: true
+//     }
+//   });
+// };
+
+
+
+
 const findActiveByBookingCode = async (bookingCode) => {
   return await Bet.findOne({
     where: {
@@ -40,7 +91,6 @@ const findActiveByBookingCode = async (bookingCode) => {
     }
   });
 };
-
 /**
  * Find all bets by user
  */

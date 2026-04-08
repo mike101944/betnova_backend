@@ -217,28 +217,32 @@ const checkPaymentStatus = async (req, res) => {
     const result = response.data;
     console.log('MzalendoPay status response:', result);
 
-    // CHECK FOR FAILED STATUS
     if (result.success && result.status === 'SUCCESS') {
       // Payment completed successfully
       const pendingPayments = global.pendingPayments || new Map();
       const pendingPayment = pendingPayments.get(order_id);
       
       if (pendingPayment && !pendingPayment.balance_added) {
+        // Get user
         const user = await userRepository.findById(userId);
         
         if (user) {
+          // Add balance
           const amountToAdd = parseFloat(result.amount) || pendingPayment.amount;
           const currentBalance = parseFloat(user.balance) || 0;
           const newBalance = currentBalance + amountToAdd;
           
+          // Update balance in database
           await userRepository.updateBalance(userId, newBalance);
           
+          // Mark as added
           pendingPayment.balance_added = true;
           pendingPayment.status = 'completed';
           pendingPayment.transid = result.transid;
           pendingPayments.set(order_id, pendingPayment);
           
           console.log(`✅ Balance updated for user ${userId}: +${amountToAdd}`);
+          console.log(`   Transaction ID: ${result.transid}`);
         }
       }
 
@@ -251,37 +255,18 @@ const checkPaymentStatus = async (req, res) => {
           amount: result.amount
         }
       });
-    } 
-    // CHECK FOR FAILED STATUS - HII NDIO IMPORTANT!!!
-    else if (result.status === 'FAILED') {
-      console.log(`❌ Payment failed for order ${order_id}:`, result.message);
-      
-      // Update pending payment status to failed
-      const pendingPayments = global.pendingPayments || new Map();
-      const pendingPayment = pendingPayments.get(order_id);
-      if (pendingPayment) {
-        pendingPayment.status = 'failed';
-        pendingPayments.set(order_id, pendingPayment);
-      }
-      
+    } else if (result.status === 'FAILED') {
       return res.status(200).json({
         success: false,
         status: 'failed',
-        message: result.message || 'Payment failed. Insufficient balance or wrong PIN.',
-        data: {
-          order_id: order_id
-        }
+        message: result.message || 'Payment failed'
       });
-    } 
-    else {
+    } else {
       // Still pending
       return res.status(200).json({
         success: false,
         status: 'pending',
-        message: result.message || 'Payment still pending. Please enter your PIN.',
-        data: {
-          order_id: order_id
-        }
+        message: result.message || 'Payment still pending'
       });
     }
 
