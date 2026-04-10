@@ -308,9 +308,9 @@ const getUserBetStats = async (userId) => {
 
 
 
-// services/bet.service.js
-
+// APPROVE / SETTLE BET
 const approveBet = async (betId, resultStatus) => {
+
   const bet = await betRepository.findById(betId);
 
   if (!bet) {
@@ -334,22 +334,12 @@ const approveBet = async (betId, resultStatus) => {
   // Update bet
   bet.result = result;
   bet.status = "SETTLED";
-  bet.settledAt = new Date();
-  bet.isBookingCodeActive = false;
 
   await bet.save();
 
-  // IF BET IS WON, ADD PAYOUT TO USER'S BALANCE
-  if (result === "WON") {
-    await userRepository.addBalance(bet.userId, parseFloat(bet.potentialReturn));
-  }
-
-  // Parse selections before returning
-  const betData = bet.toJSON();
-  betData.selections = JSON.parse(betData.selections);
-
-  return betData;
+  return bet;
 };
+
 
 
 

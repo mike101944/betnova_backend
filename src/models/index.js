@@ -3,6 +3,16 @@ const User = require('./user.model');
 const Bet = require('./bet.model');
 
 
+// Collect all models
+const models = { User, Bet };
+
+// Initialize associations - Run associate methods if they exist
+Object.keys(models).forEach(modelName => {
+  if (models[modelName].associate) {
+    models[modelName].associate(models);
+  }
+});
+
 const initModels = async () => {
   try {
     await sequelize.sync({

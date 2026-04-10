@@ -88,4 +88,13 @@ const Bet = sequelize.define('Bet', {
   timestamps: true
 });
 
+
+// Define association - Bet belongs to User
+Bet.associate = (models) => {
+  Bet.belongsTo(models.User, {
+    foreignKey: 'userId',
+    as: 'user',
+    targetKey: 'id'
+  });
+};
 module.exports = Bet;

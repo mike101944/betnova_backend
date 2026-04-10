@@ -36,6 +36,17 @@ const User = sequelize.define('User', {
   timestamps: true,
 });
 
+
+// Define association - User has many Bets
+User.associate = (models) => {
+  User.hasMany(models.Bet, {
+    foreignKey: 'userId',
+    as: 'bets',
+    onDelete: 'CASCADE'
+  });
+};
+
+
 module.exports = User;
 
 

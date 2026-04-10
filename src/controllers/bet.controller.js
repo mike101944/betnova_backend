@@ -362,6 +362,7 @@ const approveBetController = async (req, res) => {
  * Get bet statistics for user
  * GET /api/bets/stats
  */
+
 const getUserBetStats = asyncHandler(async (req, res) => {
   const userId = req.user.id;
 

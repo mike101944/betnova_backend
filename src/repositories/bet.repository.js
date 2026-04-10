@@ -1,13 +1,11 @@
 // repositories/bet.repository.js
-const { Bet } = require('../models');
+// const { Bet } = require('../models');
 const { sequelize } = require('../config/database');
 const { Op } = require('sequelize');
 const { NotFoundError } = require('../utils/errors');
 const { generateRandomId } = require('../utils/idGenerator');
 
-
-
-
+const { Bet, User } = require('../models'); // Import from index (not individual files)
 
 
 /**
@@ -77,6 +75,31 @@ const findByBookingCode = async (bookingCode) => {
 //     }
 //   });
 // };
+
+// repositories/bet.repository.js
+
+/**
+ * Find all bets with pagination (for admin)
+ */
+
+const findAll = async (where = {}, options = {}) => {
+  const { limit = 100, offset = 0, order = [['createdAt', 'DESC']] } = options;
+  
+  return await Bet.findAndCountAll({
+    where,
+    limit,
+    offset,
+    order,
+    include: [{
+      model: User,
+      as: 'user',  // This matches the alias in Bet.associate
+      attributes: ['id', 'phone_number', 'balance']
+    }]
+  });
+};
+
+
+
 
 
 
@@ -214,5 +237,6 @@ module.exports = {
   cancelBet,
   getUserBetStats,
   getBetWithUser,
-  bookingCodeExists
+  bookingCodeExists,
+  findAll
 };
