@@ -57,7 +57,7 @@ app.use('/api/football', footballRoutes);
 app.use('/api/bets', betRoutes);
 app.use('/api/auth', authRoutes);
 // Register admin routes
-app.use('/api/admin', adminBetRoutes);
+app.use('/admin', adminBetRoutes);
 /* Protected Example Route */
 app.get('/api/profile', authenticate, (req, res) => {
   res.json({
