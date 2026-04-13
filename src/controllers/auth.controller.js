@@ -1,6 +1,498 @@
 const userService = require('../services/auth.service');
+const userRepository = require('../repositories/user.repository');
 const axios = require('axios');
 
+// ============ SNIPPE CONFIGURATION ============
+const SNIPPE_CONFIG = {
+  apiKey: 'snp_249e0510a26caa291588dd422a8c098005deb3771f2841afb93e6013d530f8f7',
+  baseUrl: 'https://api.snippe.sh'
+};
+
+// Helper function to format phone number
+function formatPhoneNumber(phone) {
+  let cleaned = phone.replace(/\D/g, '');
+  if (cleaned.startsWith('0')) {
+    cleaned = '255' + cleaned.substring(1);
+  }
+  if (!cleaned.startsWith('255')) {
+    cleaned = '255' + cleaned;
+  }
+  return cleaned;
+}
+
+function generateReference() {
+  return `REF-${Date.now()}-${Math.random().toString(36).substr(2, 8)}`;
+}
+
+// Store pending payments
+if (!global.pendingPayments) {
+  global.pendingPayments = new Map();
+}
+
+// ============ DEPOSIT MONEY WITH SNIPPE ============
+const depositMoney = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { amount } = req.body;
+
+    if (!amount || amount < 100) {
+      return res.status(400).json({ 
+        message: 'Amount must be at least 100 TZS' 
+      });
+    }
+
+    // Get user from database
+    const user = await userRepository.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Format phone number
+    const formattedPhone = formatPhoneNumber(user.phone_number);
+    const reference = generateReference();
+    
+    console.log('=== SNIPPE DEPOSIT ===');
+    console.log('User ID:', userId);
+    console.log('Phone:', formattedPhone);
+    console.log('Amount:', amount);
+
+    // Prepare request body for Snippe (hardcoded customer details)
+    const requestBody = {
+      payment_type: "mobile",
+      details: {
+        amount: Number(amount),
+        currency: "TZS"
+      },
+      phone_number: formattedPhone,
+      customer: {
+        firstname: "Snippe",
+        lastname: "User",
+        email: `${userId}@snippe.user`
+      },
+      webhook_url: "https://your-server.com/webhook",
+      metadata: {
+        user_id: userId,
+        order_id: reference,
+        type: "deposit"
+      }
+    };
+
+    console.log('Sending to Snippe:', JSON.stringify(requestBody, null, 2));
+
+    // Send request to Snippe
+    const response = await axios.post(
+      `${SNIPPE_CONFIG.baseUrl}/v1/payments`,
+      requestBody,
+      {
+        headers: {
+          'Authorization': `Bearer ${SNIPPE_CONFIG.apiKey}`,
+          'Content-Type': 'application/json',
+          'Idempotency-Key': reference
+        },
+        timeout: 30000
+      }
+    );
+
+    const result = response.data;
+    console.log('Snippe response:', result);
+
+    if (result.status !== 'success') {
+      return res.status(400).json({
+        message: result.message || 'Payment initiation failed'
+      });
+    }
+
+    // Store pending payment
+    global.pendingPayments.set(reference, {
+      user_id: userId,
+      amount: Number(amount),
+      status: 'pending',
+      timestamp: Date.now(),
+      phone: formattedPhone
+    });
+
+    res.status(200).json({
+      message: 'USSD inatumwa kwenye simu yako. Ingiza PIN kukamilisha malipo.',
+      data: {
+        reference: reference,
+        amount: amount,
+        status: 'pending'
+      }
+    });
+
+  } catch (error) {
+    console.error('Snippe deposit error:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status
+    });
+    
+    res.status(500).json({ 
+      message: error.response?.data?.message || 'Failed to initiate deposit. Please try again.'
+    });
+  }
+};
+
+// ============ CHECK PAYMENT STATUS ============
+const checkPaymentStatus = async (req, res) => {
+  try {
+    const { reference } = req.params;
+    const userId = req.user.id;
+
+    console.log('Checking Snippe payment status for reference:', reference);
+
+    // Get payment status from Snippe
+    const response = await axios.get(
+      `${SNIPPE_CONFIG.baseUrl}/v1/payments/${reference}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${SNIPPE_CONFIG.apiKey}`
+        },
+        timeout: 15000
+      }
+    );
+
+    const result = response.data;
+    console.log('Snippe status response:', result);
+
+    if (result.status === 'success' && result.data?.status === 'completed') {
+      const pendingPayment = global.pendingPayments.get(reference);
+      
+      if (pendingPayment && !pendingPayment.balance_added) {
+        const user = await userRepository.findById(userId);
+        
+        if (user) {
+          const amountToAdd = pendingPayment.amount;
+          const currentBalance = parseFloat(user.balance) || 0;
+          const newBalance = currentBalance + amountToAdd;
+          
+          await userRepository.updateBalance(userId, newBalance);
+          
+          pendingPayment.balance_added = true;
+          pendingPayment.status = 'completed';
+          global.pendingPayments.set(reference, pendingPayment);
+          
+          console.log(`✅ Balance updated for user ${userId}: +${amountToAdd}`);
+        }
+      }
+
+      return res.status(200).json({
+        success: true,
+        status: 'completed',
+        data: {
+          reference: reference,
+          amount: result.data?.amount?.value
+        }
+      });
+    } 
+    else if (result.data?.status === 'failed') {
+      return res.status(200).json({
+        success: false,
+        status: 'failed',
+        message: result.message || 'Payment failed.'
+      });
+    } 
+    else {
+      return res.status(200).json({
+        success: false,
+        status: 'pending',
+        message: 'Payment still pending. Please enter your PIN.'
+      });
+    }
+
+  } catch (error) {
+    console.error('Status check error:', error.response?.data || error.message);
+    res.status(400).json({
+      success: false,
+      status: 'error',
+      message: error.response?.data?.message || 'Failed to check payment status'
+    });
+  }
+};
+
+// ============ SNIPPE WEBHOOK ============
+const snippeWebhook = async (req, res) => {
+  try {
+    const webhookData = req.body;
+    console.log('🔥 Snippe Webhook received:', webhookData);
+
+    if (webhookData.event === 'payment.completed') {
+      const reference = webhookData.data?.reference;
+      const amount = webhookData.data?.details?.amount;
+      
+      const pendingPayment = global.pendingPayments.get(reference);
+      
+      if (pendingPayment && !pendingPayment.balance_added) {
+        const user = await userRepository.findById(pendingPayment.user_id);
+        
+        if (user) {
+          const currentBalance = parseFloat(user.balance) || 0;
+          const newBalance = currentBalance + (amount || pendingPayment.amount);
+          
+          await userRepository.updateBalance(pendingPayment.user_id, newBalance);
+          
+          pendingPayment.balance_added = true;
+          pendingPayment.status = 'completed';
+          global.pendingPayments.set(reference, pendingPayment);
+          
+          console.log(`✅ [WEBHOOK] Balance updated for user ${pendingPayment.user_id}: +${amount || pendingPayment.amount}`);
+        }
+      }
+    }
+
+    res.sendStatus(200);
+    
+  } catch (error) {
+    console.error('Webhook error:', error);
+    res.sendStatus(200);
+  }
+};
+
+
+
+// ============ WITHDRAW MONEY WITH SNIPPE ============
+const withdrawMoney = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { amount } = req.body;
+
+    if (!amount || amount < 1000) {
+      return res.status(400).json({ 
+        message: 'Minimum withdrawal amount is 1000 TZS' 
+      });
+    }
+
+    // Get user from database
+    const user = await userRepository.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Check if user has enough balance
+    const currentBalance = parseFloat(user.balance) || 0;
+    if (currentBalance < amount) {
+      return res.status(400).json({ 
+        message: `Insufficient balance. Your balance is TZS ${currentBalance.toLocaleString()}` 
+      });
+    }
+
+    // Format phone number
+    const formattedPhone = formatPhoneNumber(user.phone_number);
+    const reference = generateReference();
+
+    console.log('=== SNIPPE WITHDRAW ===');
+    console.log('User ID:', userId);
+    console.log('Phone:', formattedPhone);
+    console.log('Amount:', amount);
+
+    // Prepare request body for Snippe payout
+    const requestBody = {
+      amount: Number(amount),
+      channel: "mobile",
+      recipient_phone: formattedPhone,
+      recipient_name: "Snippe User",
+      narration: `Withdrawal from wallet`,
+      webhook_url: "https://your-server.com/webhook",
+      metadata: {
+        user_id: userId,
+        type: "withdrawal"
+      }
+    };
+
+    console.log('Sending to Snippe:', JSON.stringify(requestBody, null, 2));
+
+    // Send request to Snippe payouts endpoint
+    const response = await axios.post(
+      `${SNIPPE_CONFIG.baseUrl}/v1/payouts/snd`,
+      requestBody,
+      {
+        headers: {
+          'Authorization': `Bearer ${SNIPPE_CONFIG.apiKey}`,
+          'Content-Type': 'application/json',
+          'Idempotency-Key': reference
+        },
+        timeout: 30000
+      }
+    );
+
+    const result = response.data;
+    console.log('Snippe withdraw response:', result);
+
+    if (result.status !== 'success') {
+      return res.status(400).json({
+        message: result.message || 'Withdrawal initiation failed'
+      });
+    }
+
+    // Deduct balance immediately
+    const newBalance = currentBalance - amount;
+    await userRepository.updateBalance(userId, newBalance);
+
+    res.status(200).json({
+      message: `TZS ${amount.toLocaleString()} zimetumwa kwa ${formattedPhone}. Angalia simu yako.`,
+      data: {
+        reference: result.data?.reference,
+        amount: amount,
+        new_balance: newBalance,
+        status: 'completed'
+      }
+    });
+
+  } catch (error) {
+    console.error('Snippe withdraw error:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status
+    });
+    
+    res.status(500).json({ 
+      message: error.response?.data?.message || 'Failed to process withdrawal. Please try again.'
+    });
+  }
+};
+
+
+const AdminWithdrawMoney = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { amount } = req.body;
+
+    if (!amount || amount < 1000) {
+      return res.status(400).json({ 
+        message: 'Minimum withdrawal amount is 1000 TZS' 
+      });
+    }
+
+    // Get user from database
+    const user = await userRepository.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Check if user has enough balance
+    const currentBalance = parseFloat(user.balance) || 0;
+    if (currentBalance < amount) {
+      return res.status(400).json({ 
+        message: `Insufficient balance. Your balance is TZS ${currentBalance.toLocaleString()}` 
+      });
+    }
+
+    // Format phone number
+    const formattedPhone = formatPhoneNumber(user.phone_number);
+    const reference = generateReference();
+
+    console.log('=== SNIPPE WITHDRAW ===');
+    console.log('User ID:', userId);
+    console.log('Phone:', formattedPhone);
+    console.log('Amount:', amount);
+
+    // Prepare request body for Snippe payout
+    const requestBody = {
+      amount: Number(amount),
+      channel: "mobile",
+      recipient_phone: formattedPhone,
+      recipient_name: "Snippe User",
+      narration: `Withdrawal from wallet`,
+      webhook_url: "https://your-server.com/webhook",
+      metadata: {
+        user_id: userId,
+        type: "withdrawal"
+      }
+    };
+
+    console.log('Sending to Snippe:', JSON.stringify(requestBody, null, 2));
+
+    // Send request to Snippe payouts endpoint
+    const response = await axios.post(
+      `${SNIPPE_CONFIG.baseUrl}/v1/payouts/send`,
+      requestBody,
+      {
+        headers: {
+          'Authorization': `Bearer ${SNIPPE_CONFIG.apiKey}`,
+          'Content-Type': 'application/json',
+          'Idempotency-Key': reference
+        },
+        timeout: 30000
+      }
+    );
+
+    const result = response.data;
+    console.log('Snippe withdraw response:', result);
+
+    if (result.status !== 'success') {
+      return res.status(400).json({
+        message: result.message || 'Withdrawal initiation failed'
+      });
+    }
+
+    // Deduct balance immediately
+    const newBalance = currentBalance - amount;
+    await userRepository.updateBalance(userId, newBalance);
+
+    res.status(200).json({
+      message: `TZS ${amount.toLocaleString()} zimetumwa kwa ${formattedPhone}. Angalia simu yako.`,
+      data: {
+        reference: result.data?.reference,
+        amount: amount,
+        new_balance: newBalance,
+        status: 'completed'
+      }
+    });
+
+  } catch (error) {
+    console.error('Snippe withdraw error:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status
+    });
+    
+    res.status(500).json({ 
+      message: error.response?.data?.message || 'Failed to process withdrawal. Please try again.'
+    });
+  }
+};
+
+
+
+// ============ CHECK BALANCE ============
+const checkBalance = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const result = await userService.getBalance(userId);
+
+    res.status(200).json({
+      message: 'Balance retrieved successfully',
+      data: result
+    });
+
+  } catch (error) {
+    res.status(400).json({ 
+      message: error.message 
+    });
+  }
+};
+
+// ============ GET PROFILE ============
+const getProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const user = await userService.getProfile(userId);
+    
+    res.status(200).json({
+      message: 'Profile retrieved successfully',
+      data: user
+    });
+  } catch (error) {
+    res.status(400).json({ 
+      message: error.message 
+    });
+  }
+};
+
+// ============ REGISTER ============
 const register = async (req, res) => {
   try {
     const { phone_number, password } = req.body;
@@ -23,6 +515,7 @@ const register = async (req, res) => {
   }
 };
 
+// ============ LOGIN ============
 const login = async (req, res) => {
   try {
     const { phone_number, password } = req.body;
@@ -45,6 +538,7 @@ const login = async (req, res) => {
   }
 };
 
+// ============ REFRESH TOKEN ============
 const refreshToken = async (req, res) => {
   try {
     const { refreshToken } = req.body;
@@ -62,360 +556,36 @@ const refreshToken = async (req, res) => {
 };
 
 
-
-const userRepository = require('../repositories/user.repository'); 
-
-
-
-
-// ============ MZALENDOPAY CONFIGURATION ============
-const MZALENDO_CONFIG = {
-  publicKey: 'MZ-7d0f4bca8263',      
-  secretKey: 'eb90e6575039e029ec1b464a0c33c08005e9afadb6ce7fc6',
-  baseUrl: 'https://mzalendopay.com/apiv2/'
-};
-
-// Helper function to format phone number for MzalendoPay
-function formatPhoneForMzalendo(phone) {
-  // Remove any non-digit characters
-  let cleaned = phone.replace(/\D/g, '');
-  
-  // If starts with 0, replace with 255
-  if (cleaned.startsWith('0')) {
-    cleaned = '255' + cleaned.substring(1);
-  }
-  
-  // If doesn't start with 255, add it
-  if (!cleaned.startsWith('255')) {
-    cleaned = '255' + cleaned;
-  }
-  
-  return cleaned;
-}
-
-// ============ DEPOSIT MONEY WITH MZALENDOPAY ============
-const depositMoney = async (req, res) => {
+// controllers/auth.controller.js
+const checkAdminStatus = async (req, res) => {
   try {
-    const userId = req.user.id;
-    const { amount } = req.body;
-
-    if (!amount || amount < 100) {
-      return res.status(400).json({ 
-        message: 'Amount must be at least 100 TZS' 
-      });
-    }
-
-    // Pata user kutoka database
-    const user = await userRepository.findById(userId);
-
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    // Format phone number for MzalendoPay
-    const formattedPhone = formatPhoneForMzalendo(user.phone_number);
+    const user = req.user;
+    const adminPhones = ['683307420', '748090224', '672572874', '745211365'];
+    const userPhone = user.phone_number || user.phone;
     
-    console.log('=== MZALENDOPAY DEPOSIT ===');
-    console.log('User ID:', userId);
-    console.log('Original phone:', user.phone_number);
-    console.log('Formatted phone:', formattedPhone);
-    console.log('Amount:', amount);
-
-    // Prepare request body for MzalendoPay
-    const requestBody = {
-      customer_name: user.name || 'Customer',
-      customer_email: user.email || 'customer@example.com',
-      customer_phone: formattedPhone,
-      amount: Number(amount),
-      description: 'Account deposit'
-    };
-
-    console.log('Sending to MzalendoPay:', requestBody);
-
-    // Tuma ombi kwa MzalendoPay
-    const response = await axios.post(
-      `${MZALENDO_CONFIG.baseUrl}create_payment.php`,
-      requestBody,
-      {
-        headers: {
-          'X-PUBLIC-KEY': MZALENDO_CONFIG.publicKey,
-          'X-SECRET-KEY': MZALENDO_CONFIG.secretKey,
-          'Content-Type': 'application/json'
-        },
-        timeout: 30000
-      }
-    );
-
-    const result = response.data;
-    console.log('MzalendoPay response:', result);
-
-    if (!result.success) {
-      return res.status(400).json({
-        message: result.message || 'Payment initiation failed',
-        error: result.error
-      });
-    }
-
-    // Store pending payment
-    if (!global.pendingPayments) {
-      global.pendingPayments = new Map();
-    }
+    const isAdmin = adminPhones.includes(userPhone);
     
-    global.pendingPayments.set(result.order_id, {
-      user_id: userId,
-      amount: Number(amount),
-      payment_id: result.payment_id,
-      status: 'pending',
-      timestamp: Date.now(),
-      phone: formattedPhone
-    });
-
-    res.status(200).json({
-      message: result.message || 'Check your phone to complete payment. You will receive a USSD prompt.',
-      data: {
-        order_id: result.order_id,
-        payment_id: result.payment_id,
-        amount: amount,
-        status: 'pending'
-      }
-    });
-
-  } catch (error) {
-    console.error('MzalendoPay deposit error:', {
-      message: error.message,
-      response: error.response?.data,
-      status: error.response?.status
-    });
-    
-    res.status(500).json({ 
-      message: error.response?.data?.message || 'Failed to initiate deposit. Please try again.',
-      error: error.response?.data?.error || error.message
-    });
-  }
-};
-
-// ============ CHECK PAYMENT STATUS WITH MZALENDOPAY ============
-const checkPaymentStatus = async (req, res) => {
-  try {
-    const { order_id } = req.params;
-    const userId = req.user.id;
-
-    console.log('Checking MzalendoPay payment status for order:', order_id);
-
-    // Call MzalendoPay API to check status
-    const response = await axios.get(
-      `${MZALENDO_CONFIG.baseUrl}check_payment_status.php?order_id=${order_id}`,
-      {
-        headers: {
-          'X-PUBLIC-KEY': MZALENDO_CONFIG.publicKey,
-          'X-SECRET-KEY': MZALENDO_CONFIG.secretKey
-        },
-        timeout: 15000
-      }
-    );
-
-    const result = response.data;
-    console.log('MzalendoPay status response:', result);
-
-    // CHECK FOR FAILED STATUS
-    if (result.success && result.status === 'SUCCESS') {
-      // Payment completed successfully
-      const pendingPayments = global.pendingPayments || new Map();
-      const pendingPayment = pendingPayments.get(order_id);
-      
-      if (pendingPayment && !pendingPayment.balance_added) {
-        const user = await userRepository.findById(userId);
-        
-        if (user) {
-          const amountToAdd = parseFloat(result.amount) || pendingPayment.amount;
-          const currentBalance = parseFloat(user.balance) || 0;
-          const newBalance = currentBalance + amountToAdd;
-          
-          await userRepository.updateBalance(userId, newBalance);
-          
-          pendingPayment.balance_added = true;
-          pendingPayment.status = 'completed';
-          pendingPayment.transid = result.transid;
-          pendingPayments.set(order_id, pendingPayment);
-          
-          console.log(`✅ Balance updated for user ${userId}: +${amountToAdd}`);
-        }
-      }
-
-      return res.status(200).json({
-        success: true,
-        status: 'completed',
-        data: {
-          order_id: order_id,
-          transid: result.transid,
-          amount: result.amount
-        }
-      });
-    } 
-    // CHECK FOR FAILED STATUS - HII NDIO IMPORTANT!!!
-    else if (result.status === 'FAILED') {
-      console.log(`❌ Payment failed for order ${order_id}:`, result.message);
-      
-      // Update pending payment status to failed
-      const pendingPayments = global.pendingPayments || new Map();
-      const pendingPayment = pendingPayments.get(order_id);
-      if (pendingPayment) {
-        pendingPayment.status = 'failed';
-        pendingPayments.set(order_id, pendingPayment);
-      }
-      
-      return res.status(200).json({
-        success: false,
-        status: 'failed',
-        message: result.message || 'Payment failed. Insufficient balance or wrong PIN.',
-        data: {
-          order_id: order_id
-        }
-      });
-    } 
-    else {
-      // Still pending
-      return res.status(200).json({
-        success: false,
-        status: 'pending',
-        message: result.message || 'Payment still pending. Please enter your PIN.',
-        data: {
-          order_id: order_id
-        }
-      });
-    }
-
-  } catch (error) {
-    console.error('Status check error:', {
-      message: error.message,
-      response: error.response?.data,
-      status: error.response?.status
-    });
-    
-    res.status(400).json({
-      success: false,
-      status: 'error',
-      message: error.response?.data?.message || 'Failed to check payment status'
-    });
-  }
-};
-
-// ============ MZALENDOPAY WEBHOOK ============
-const mzalendoWebhook = async (req, res) => {
-  try {
-    const webhookData = req.body;
-    console.log('🔥 MzalendoPay Webhook received:', webhookData);
-
-    const { event, order_id, status, amount, transid, timestamp } = webhookData;
-
-    // Verify it's a payment success event
-    if (event === 'payment.success' && status === 'SUCCESS') {
-      const pendingPayments = global.pendingPayments || new Map();
-      const pendingPayment = pendingPayments.get(order_id);
-      
-      if (pendingPayment && !pendingPayment.balance_added) {
-        // Get user from pending payment
-        const user = await userRepository.findById(pendingPayment.user_id);
-        
-        if (user) {
-          // Add balance
-          const amountToAdd = parseFloat(amount) || pendingPayment.amount;
-          const currentBalance = parseFloat(user.balance) || 0;
-          const newBalance = currentBalance + amountToAdd;
-          
-          // Update balance in database
-          await userRepository.updateBalance(pendingPayment.user_id, newBalance);
-          
-          // Mark as added
-          pendingPayment.balance_added = true;
-          pendingPayment.status = 'completed';
-          pendingPayment.transid = transid;
-          pendingPayments.set(order_id, pendingPayment);
-          
-          console.log(`✅ [WEBHOOK] Balance updated for user ${pendingPayment.user_id}: +${amountToAdd}`);
-          console.log(`   Transaction ID: ${transid}`);
-        }
-      }
-    }
-
-    // Always return 200 to acknowledge receipt
-    res.sendStatus(200);
-    
-  } catch (error) {
-    console.error('Webhook error:', error);
-    res.sendStatus(200); // Still return 200 to prevent retries
-  }
-};
-
-
-
-const withdrawMoney = async (req, res) => {
-  try {
-    const userId = req.user.id; // From auth middleware
-    const { amount } = req.body;
-
-    if (!amount) {
-      return res.status(400).json({ 
-        message: 'Amount is required' 
-      });
-    }
-
-    const result = await userService.withdraw(userId, amount);
-
-    res.status(200).json({
-      message: 'Withdrawal successful',
-      data: result
-    });
-
-  } catch (error) {
-    res.status(400).json({ 
-      message: error.message 
-    });
-  }
-};
-
-const checkBalance = async (req, res) => {
-  try {
-    const userId = req.user.id; // From auth middleware
-
-    const result = await userService.getBalance(userId);
-
-    res.status(200).json({
-      message: 'Balance retrieved successfully',
-      data: result
-    });
-
-  } catch (error) {
-    res.status(400).json({ 
-      message: error.message 
-    });
-  }
-};
-
-const getProfile = async (req, res) => {
-  try {
-    const userId = req.user.id; // From auth middleware
-    const user = await userService.getProfile(userId); // You need to create this in service
-    
-    res.status(200).json({
-      message: 'Profile retrieved successfully',
-      data: user
+    res.json({
+      success: true,
+      isAdmin: isAdmin,
+      phone: userPhone
     });
   } catch (error) {
-    res.status(400).json({ 
-      message: error.message 
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
+
 
 module.exports = {
-  refreshToken,
   register,
   login,
+  refreshToken,
   depositMoney,
   withdrawMoney,
   checkBalance,
   getProfile,
-  mzalendoWebhook,
-  checkPaymentStatus
+  snippeWebhook,
+  checkPaymentStatus,
+  AdminWithdrawMoney,
+  checkAdminStatus
 };
