@@ -4,27 +4,19 @@ const axios = require('axios');
 const crypto = require('crypto');
 
 // ============ PAYOU CONFIGURATION ============
-// const PAYOU = {
-//   merchantId: '1031',
-//   secret: '99fcaf0a5a09eb767eed96598dd4719e',
-//   paymentUrl: 'https://pay.payou.cc/sci/v1/',
-//   paymentMethod: 'MoneyTZS_Spy',
-//   success_url: 'https://betnover.com/user/deposit/history',
-//   failed_url: 'https://betnover.com/user/deposit/history'
-// };
-
 const PAYOU = {
   merchantId: '1031',
   secret: '99fcaf0a5a09eb767eed96598dd4719e',
   paymentUrl: 'https://pay.payou.cc/sci/v1/',
   paymentMethod: 'MoneyTZS_Spy',
-  success_url: 'https://betnover.com/account',
-  failed_url: 'https://betnover.com/deposite'
+  success_url: 'https://betnover.com/user/deposit/history',
+  failed_url: 'https://betnover.com/user/deposit/history'
 };
 
 
 
-// ============ SNIPPE CONFIGURATION (KEPT FOR WITHDRAWALS) ============
+
+// ============ SNIPPE CONFIGURATION  ============
 const SNIPPE_CONFIG = {
   apiKey: 'snp_249e0510a26caa291588dd422a8c098005deb3771f2841afb93e6013d530f8f7',
   baseUrl: 'https://api.snippe.sh'
