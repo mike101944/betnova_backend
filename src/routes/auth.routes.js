@@ -10,7 +10,7 @@ router.post('/login', userController.login);
 router.post('/refresh', userController.refreshToken);
 router.post('/webhook', userController.payouWebhook);
 
-// ADD THIS LINE - all routes below need token
+//  all routes below need token
 router.use(authenticate);
 
 // Protected routes (zinahitaji token)

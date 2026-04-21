@@ -137,7 +137,7 @@ const depositMoney = async (req, res) => {
 
 // ============ PAYOU WEBHOOK (Add this to your routes) ============
 const payouWebhook = async (req, res) => {
-  console.log('📥 Payou Webhook received:', req.body);
+  console.log(' Payou Webhook received:', req.body);
 
   const body = req.body;
 
@@ -147,19 +147,19 @@ const payouWebhook = async (req, res) => {
   );
 
   if (expectedSign !== body.SIGN) {
-    console.log('❌ Invalid signature');
+    console.log(' Invalid signature');
     return res.status(400).send(`${body.MERCHANT_ORDER_ID}|error`);
   }
 
   const pendingPayment = global.payouPayments.get(body.MERCHANT_ORDER_ID);
 
   if (!pendingPayment) {
-    console.log('❌ Pending payment not found:', body.MERCHANT_ORDER_ID);
+    console.log(' Pending payment not found:', body.MERCHANT_ORDER_ID);
     return res.status(404).send(`${body.MERCHANT_ORDER_ID}|error`);
   }
 
   if (body.status !== 'success') {
-    console.log('❌ Payment not successful:', body.status);
+    console.log(' Payment not successful:', body.status);
     return res.send(`${body.MERCHANT_ORDER_ID}|error`);
   }
 
@@ -173,7 +173,7 @@ const payouWebhook = async (req, res) => {
     const user = await userRepository.findById(pendingPayment.user_id);
     
     if (!user) {
-      console.log('❌ User not found:', pendingPayment.user_id);
+      console.log(' User not found:', pendingPayment.user_id);
       return res.send(`${body.MERCHANT_ORDER_ID}|error`);
     }
 
@@ -190,13 +190,13 @@ const payouWebhook = async (req, res) => {
     pendingPayment.transaction_id = body.intid;
     global.payouPayments.set(body.MERCHANT_ORDER_ID, pendingPayment);
 
-    console.log(`✅💰 Balance updated for user ${pendingPayment.user_id}: +${amountToAdd} TZS`);
+    console.log(` Balance updated for user ${pendingPayment.user_id}: +${amountToAdd} TZS`);
     console.log(`   Old balance: ${currentBalance} | New balance: ${newBalance}`);
 
     return res.send(`${body.MERCHANT_ORDER_ID}|success`);
 
   } catch (error) {
-    console.error('❌ Error updating balance:', error);
+    console.error(' Error updating balance:', error);
     return res.send(`${body.MERCHANT_ORDER_ID}|error`);
   }
 };
@@ -250,7 +250,7 @@ const checkPaymentStatus = async (req, res) => {
 const snippeWebhook = async (req, res) => {
   try {
     const webhookData = req.body;
-    console.log('🔥 Snippe Webhook received:', webhookData);
+    console.log(' Snippe Webhook received:', webhookData);
 
     if (webhookData.event === 'payment.completed') {
       const reference = webhookData.data?.reference;
@@ -271,7 +271,7 @@ const snippeWebhook = async (req, res) => {
           pendingPayment.status = 'completed';
           if (global.pendingPayments) global.pendingPayments.set(reference, pendingPayment);
           
-          console.log(`✅ [WEBHOOK] Balance updated for user ${pendingPayment.user_id}: +${amount || pendingPayment.amount}`);
+          console.log(`[WEBHOOK] Balance updated for user ${pendingPayment.user_id}: +${amount || pendingPayment.amount}`);
         }
       }
     }
