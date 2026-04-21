@@ -1,30 +1,8 @@
 const userService = require('../services/auth.service');
 const userRepository = require('../repositories/user.repository');
 const axios = require('axios');
-const crypto = require('crypto');
 
-// ============ PAYOU CONFIGURATION ============
-// const PAYOU = {
-//   merchantId: '1031',
-//   secret: '99fcaf0a5a09eb767eed96598dd4719e',
-//   paymentUrl: 'https://pay.payou.cc/sci/v1/',
-//   paymentMethod: 'MoneyTZS_Spy',
-//   success_url: 'https://betnover.com/user/deposit/history',
-//   failed_url: 'https://betnover.com/user/deposit/history'
-// };
-
-const PAYOU = {
-  merchantId: '1031',
-  secret: '99fcaf0a5a09eb767eed96598dd4719e',
-  paymentUrl: 'https://pay.payou.cc/sci/v1/',
-  paymentMethod: 'MoneyTZS_Spy',
-  success_url: 'https://betnover.com/account',
-  failed_url: 'https://betnover.com/deposite'
-};
-
-
-
-// ============ SNIPPE CONFIGURATION (KEPT FOR WITHDRAWALS) ============
+// ============ SNIPPE CONFIGURATION ============
 const SNIPPE_CONFIG = {
   apiKey: 'snp_249e0510a26caa291588dd422a8c098005deb3771f2841afb93e6013d530f8f7',
   baseUrl: 'https://api.snippe.sh'
@@ -46,25 +24,12 @@ function generateReference() {
   return `REF-${Date.now()}-${Math.random().toString(36).substr(2, 8)}`;
 }
 
-function generatePayouRef(prefix = 'PAYOU') {
-  return `${prefix}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+// Store pending payments
+if (!global.pendingPayments) {
+  global.pendingPayments = new Map();
 }
 
-function md5(str) {
-  return crypto.createHash('md5').update(str).digest('hex');
-}
-
-// Generate Payou hash
-function generatePayouHash(id, summ, secret, system, orderId) {
-  return md5(`${id}:${summ}:${secret}:${system}:${orderId}`);
-}
-
-// Store pending payments for Payou
-if (!global.payouPayments) {
-  global.payouPayments = new Map();
-}
-
-// ============ DEPOSIT MONEY WITH PAYOU (REDIRECT METHOD) ============
+// ============ DEPOSIT MONEY WITH SNIPPE ============
 const depositMoney = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -83,178 +48,170 @@ const depositMoney = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    const summ = Number(amount).toFixed(2);
-    const order_id = generatePayouRef('PAYOU');
-    const user_code = userId.toString();
-    const user_email = user.email || `${userId}@user.com`;
+    // Format phone number
+    const formattedPhone = formatPhoneNumber(user.phone_number);
+    const reference = generateReference();
+    
+    console.log('=== SNIPPE DEPOSIT ===');
+    console.log('User ID:', userId);
+    console.log('Phone:', formattedPhone);
+    console.log('Amount:', amount);
 
-    // Generate hash
-    const hash = generatePayouHash(
-      PAYOU.merchantId,
-      summ,
-      PAYOU.secret,
-      PAYOU.paymentMethod,
-      order_id
+    // Prepare request body for Snippe (hardcoded customer details)
+    const requestBody = {
+      payment_type: "mobile",
+      details: {
+        amount: Number(amount),
+        currency: "TZS"
+      },
+      phone_number: formattedPhone,
+      customer: {
+        firstname: "Snippe",
+        lastname: "User",
+        email: `${userId}@snippe.user`
+      },
+      webhook_url: "https://your-server.com/webhook",
+      metadata: {
+        user_id: userId,
+        order_id: reference,
+        type: "deposit"
+      }
+    };
+
+    console.log('Sending to Snippe:', JSON.stringify(requestBody, null, 2));
+
+    // Send request to Snippe
+    const response = await axios.post(
+      `${SNIPPE_CONFIG.baseUrl}/v1/payments`,
+      requestBody,
+      {
+        headers: {
+          'Authorization': `Bearer ${SNIPPE_CONFIG.apiKey}`,
+          'Content-Type': 'application/json',
+          'Idempotency-Key': reference
+        },
+        timeout: 30000
+      }
     );
 
-    // Build redirect URL
-    const paymentUrl = `${PAYOU.paymentUrl}?` + new URLSearchParams({
-      id: PAYOU.merchantId,
-      sistems: PAYOU.paymentMethod,
-      summ: summ,
-      order_id: order_id,
-      user_code: user_code,
-      user_email: user_email,
-      hash: hash,
-      success_url: PAYOU.success_url,
-      failed_url: PAYOU.failed_url
-    }).toString();
+    const result = response.data;
+    console.log('Snippe response:', result);
 
-    // Store pending payment for webhook
-    global.payouPayments.set(order_id, {
+    if (result.status !== 'success') {
+      return res.status(400).json({
+        message: result.message || 'Payment initiation failed'
+      });
+    }
+
+    // Store pending payment
+    global.pendingPayments.set(reference, {
       user_id: userId,
       amount: Number(amount),
       status: 'pending',
       timestamp: Date.now(),
-      order_id: order_id
+      phone: formattedPhone
     });
 
-    console.log('=== PAYOU DEPOSIT ===');
-    console.log('User ID:', userId);
-    console.log('Amount:', amount);
-    console.log('Order ID:', order_id);
-    console.log('Payment URL:', paymentUrl);
-
     res.status(200).json({
-      message: 'Redirecting to payment page',
+      message: 'USSD inatumwa kwenye simu yako. Ingiza PIN kukamilisha malipo.',
       data: {
-        paymentUrl: paymentUrl,
-        order_id: order_id,
+        reference: reference,
         amount: amount,
         status: 'pending'
       }
     });
 
   } catch (error) {
-    console.error('Payou deposit error:', error);
+    console.error('Snippe deposit error:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status
+    });
+    
     res.status(500).json({ 
-      message: 'Failed to initiate deposit. Please try again.'
+      message: error.response?.data?.message || 'Failed to initiate deposit. Please try again.'
     });
   }
 };
 
-// ============ PAYOU WEBHOOK (Add this to your routes) ============
-const payouWebhook = async (req, res) => {
-  console.log('📥 Payou Webhook received:', req.body);
-
-  const body = req.body;
-
-  // Verify signature
-  const expectedSign = md5(
-    `${PAYOU.merchantId}:${body.AMOUNT}:${PAYOU.secret}:${body.status}:${body.intid}:${body.MERCHANT_ORDER_ID}`
-  );
-
-  if (expectedSign !== body.SIGN) {
-    console.log('❌ Invalid signature');
-    return res.status(400).send(`${body.MERCHANT_ORDER_ID}|error`);
-  }
-
-  const pendingPayment = global.payouPayments.get(body.MERCHANT_ORDER_ID);
-
-  if (!pendingPayment) {
-    console.log('❌ Pending payment not found:', body.MERCHANT_ORDER_ID);
-    return res.status(404).send(`${body.MERCHANT_ORDER_ID}|error`);
-  }
-
-  if (body.status !== 'success') {
-    console.log('❌ Payment not successful:', body.status);
-    return res.send(`${body.MERCHANT_ORDER_ID}|error`);
-  }
-
-  if (pendingPayment.status === 'completed') {
-    console.log('⚠️ Payment already processed');
-    return res.send(`${body.MERCHANT_ORDER_ID}|success`);
-  }
-
-  // Update user balance in database
-  try {
-    const user = await userRepository.findById(pendingPayment.user_id);
-    
-    if (!user) {
-      console.log('❌ User not found:', pendingPayment.user_id);
-      return res.send(`${body.MERCHANT_ORDER_ID}|error`);
-    }
-
-    const currentBalance = parseFloat(user.balance) || 0;
-    const amountToAdd = parseFloat(body.AMOUNT) || pendingPayment.amount;
-    const newBalance = currentBalance + amountToAdd;
-
-    // Update balance using your repository
-    await userRepository.updateBalance(pendingPayment.user_id, newBalance);
-
-    // Mark as completed
-    pendingPayment.status = 'completed';
-    pendingPayment.balance_added = true;
-    pendingPayment.transaction_id = body.intid;
-    global.payouPayments.set(body.MERCHANT_ORDER_ID, pendingPayment);
-
-    console.log(`✅💰 Balance updated for user ${pendingPayment.user_id}: +${amountToAdd} TZS`);
-    console.log(`   Old balance: ${currentBalance} | New balance: ${newBalance}`);
-
-    return res.send(`${body.MERCHANT_ORDER_ID}|success`);
-
-  } catch (error) {
-    console.error('❌ Error updating balance:', error);
-    return res.send(`${body.MERCHANT_ORDER_ID}|error`);
-  }
-};
-
-// ============ CHECK PAYMENT STATUS (UPDATED FOR PAYOU) ============
+// ============ CHECK PAYMENT STATUS ============
 const checkPaymentStatus = async (req, res) => {
   try {
     const { reference } = req.params;
     const userId = req.user.id;
 
-    console.log('Checking Payou payment status for reference:', reference);
+    console.log('Checking Snippe payment status for reference:', reference);
 
-    const pendingPayment = global.payouPayments.get(reference);
+    // Get payment status from Snippe
+    const response = await axios.get(
+      `${SNIPPE_CONFIG.baseUrl}/v1/payments/${reference}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${SNIPPE_CONFIG.apiKey}`
+        },
+        timeout: 15000
+      }
+    );
 
-    if (!pendingPayment) {
-      return res.status(200).json({
-        success: false,
-        status: 'not_found',
-        message: 'Payment reference not found'
-      });
-    }
+    const result = response.data;
+    console.log('Snippe status response:', result);
 
-    if (pendingPayment.status === 'completed') {
+    if (result.status === 'success' && result.data?.status === 'completed') {
+      const pendingPayment = global.pendingPayments.get(reference);
+      
+      if (pendingPayment && !pendingPayment.balance_added) {
+        const user = await userRepository.findById(userId);
+        
+        if (user) {
+          const amountToAdd = pendingPayment.amount;
+          const currentBalance = parseFloat(user.balance) || 0;
+          const newBalance = currentBalance + amountToAdd;
+          
+          await userRepository.updateBalance(userId, newBalance);
+          
+          pendingPayment.balance_added = true;
+          pendingPayment.status = 'completed';
+          global.pendingPayments.set(reference, pendingPayment);
+          
+          console.log(`✅ Balance updated for user ${userId}: +${amountToAdd}`);
+        }
+      }
+
       return res.status(200).json({
         success: true,
         status: 'completed',
         data: {
           reference: reference,
-          amount: pendingPayment.amount
+          amount: result.data?.amount?.value
         }
+      });
+    } 
+    else if (result.data?.status === 'failed') {
+      return res.status(200).json({
+        success: false,
+        status: 'failed',
+        message: result.message || 'Payment failed.'
+      });
+    } 
+    else {
+      return res.status(200).json({
+        success: false,
+        status: 'pending',
+        message: 'Payment still pending. Please enter your PIN.'
       });
     }
 
-    return res.status(200).json({
-      success: false,
-      status: 'pending',
-      message: 'Payment still pending. Complete payment on Payou page.'
-    });
-
   } catch (error) {
-    console.error('Status check error:', error);
+    console.error('Status check error:', error.response?.data || error.message);
     res.status(400).json({
       success: false,
       status: 'error',
-      message: 'Failed to check payment status'
+      message: error.response?.data?.message || 'Failed to check payment status'
     });
   }
 };
 
-// ============ SNIPPE WEBHOOK (KEPT FOR WITHDRAWALS) ============
+// ============ SNIPPE WEBHOOK ============
 const snippeWebhook = async (req, res) => {
   try {
     const webhookData = req.body;
@@ -264,7 +221,7 @@ const snippeWebhook = async (req, res) => {
       const reference = webhookData.data?.reference;
       const amount = webhookData.data?.details?.amount;
       
-      const pendingPayment = global.pendingPayments?.get(reference);
+      const pendingPayment = global.pendingPayments.get(reference);
       
       if (pendingPayment && !pendingPayment.balance_added) {
         const user = await userRepository.findById(pendingPayment.user_id);
@@ -277,7 +234,7 @@ const snippeWebhook = async (req, res) => {
           
           pendingPayment.balance_added = true;
           pendingPayment.status = 'completed';
-          if (global.pendingPayments) global.pendingPayments.set(reference, pendingPayment);
+          global.pendingPayments.set(reference, pendingPayment);
           
           console.log(`✅ [WEBHOOK] Balance updated for user ${pendingPayment.user_id}: +${amount || pendingPayment.amount}`);
         }
@@ -292,7 +249,9 @@ const snippeWebhook = async (req, res) => {
   }
 };
 
-// ============ WITHDRAW MONEY WITH SNIPPE (UNCHANGED) ============
+
+
+// ============ WITHDRAW MONEY WITH SNIPPE ============
 const withdrawMoney = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -304,12 +263,14 @@ const withdrawMoney = async (req, res) => {
       });
     }
 
+    // Get user from database
     const user = await userRepository.findById(userId);
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
+    // Check if user has enough balance
     const currentBalance = parseFloat(user.balance) || 0;
     if (currentBalance < amount) {
       return res.status(400).json({ 
@@ -317,6 +278,7 @@ const withdrawMoney = async (req, res) => {
       });
     }
 
+    // Format phone number
     const formattedPhone = formatPhoneNumber(user.phone_number);
     const reference = generateReference();
 
@@ -325,6 +287,7 @@ const withdrawMoney = async (req, res) => {
     console.log('Phone:', formattedPhone);
     console.log('Amount:', amount);
 
+    // Prepare request body for Snippe payout
     const requestBody = {
       amount: Number(amount),
       channel: "mobile",
@@ -338,8 +301,11 @@ const withdrawMoney = async (req, res) => {
       }
     };
 
+    console.log('Sending to Snippe:', JSON.stringify(requestBody, null, 2));
+
+    // Send request to Snippe payouts endpoint
     const response = await axios.post(
-      `${SNIPPE_CONFIG.baseUrl}/v1/payouts/send`,
+      `${SNIPPE_CONFIG.baseUrl}/v1/payouts/snd`,
       requestBody,
       {
         headers: {
@@ -352,6 +318,7 @@ const withdrawMoney = async (req, res) => {
     );
 
     const result = response.data;
+    console.log('Snippe withdraw response:', result);
 
     if (result.status !== 'success') {
       return res.status(400).json({
@@ -359,6 +326,7 @@ const withdrawMoney = async (req, res) => {
       });
     }
 
+    // Deduct balance immediately
     const newBalance = currentBalance - amount;
     await userRepository.updateBalance(userId, newBalance);
 
@@ -385,7 +353,7 @@ const withdrawMoney = async (req, res) => {
   }
 };
 
-// ============ ADMIN WITHDRAW (UNCHANGED) ============
+
 const AdminWithdrawMoney = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -397,12 +365,14 @@ const AdminWithdrawMoney = async (req, res) => {
       });
     }
 
+    // Get user from database
     const user = await userRepository.findById(userId);
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
+    // Check if user has enough balance
     const currentBalance = parseFloat(user.balance) || 0;
     if (currentBalance < amount) {
       return res.status(400).json({ 
@@ -410,6 +380,7 @@ const AdminWithdrawMoney = async (req, res) => {
       });
     }
 
+    // Format phone number
     const formattedPhone = formatPhoneNumber(user.phone_number);
     const reference = generateReference();
 
@@ -418,6 +389,7 @@ const AdminWithdrawMoney = async (req, res) => {
     console.log('Phone:', formattedPhone);
     console.log('Amount:', amount);
 
+    // Prepare request body for Snippe payout
     const requestBody = {
       amount: Number(amount),
       channel: "mobile",
@@ -431,6 +403,9 @@ const AdminWithdrawMoney = async (req, res) => {
       }
     };
 
+    console.log('Sending to Snippe:', JSON.stringify(requestBody, null, 2));
+
+    // Send request to Snippe payouts endpoint
     const response = await axios.post(
       `${SNIPPE_CONFIG.baseUrl}/v1/payouts/send`,
       requestBody,
@@ -445,6 +420,7 @@ const AdminWithdrawMoney = async (req, res) => {
     );
 
     const result = response.data;
+    console.log('Snippe withdraw response:', result);
 
     if (result.status !== 'success') {
       return res.status(400).json({
@@ -452,6 +428,7 @@ const AdminWithdrawMoney = async (req, res) => {
       });
     }
 
+    // Deduct balance immediately
     const newBalance = currentBalance - amount;
     await userRepository.updateBalance(userId, newBalance);
 
@@ -478,7 +455,9 @@ const AdminWithdrawMoney = async (req, res) => {
   }
 };
 
-// ============ CHECK BALANCE (UNCHANGED) ============
+
+
+// ============ CHECK BALANCE ============
 const checkBalance = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -496,7 +475,7 @@ const checkBalance = async (req, res) => {
   }
 };
 
-// ============ GET PROFILE (UNCHANGED) ============
+// ============ GET PROFILE ============
 const getProfile = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -513,7 +492,7 @@ const getProfile = async (req, res) => {
   }
 };
 
-// ============ REGISTER (UNCHANGED) ============
+// ============ REGISTER ============
 const register = async (req, res) => {
   try {
     const { phone_number, password } = req.body;
@@ -536,7 +515,7 @@ const register = async (req, res) => {
   }
 };
 
-// ============ LOGIN (UNCHANGED) ============
+// ============ LOGIN ============
 const login = async (req, res) => {
   try {
     const { phone_number, password } = req.body;
@@ -559,7 +538,7 @@ const login = async (req, res) => {
   }
 };
 
-// ============ REFRESH TOKEN (UNCHANGED) ============
+// ============ REFRESH TOKEN ============
 const refreshToken = async (req, res) => {
   try {
     const { refreshToken } = req.body;
@@ -576,7 +555,8 @@ const refreshToken = async (req, res) => {
   }
 };
 
-// ============ CHECK ADMIN STATUS (UNCHANGED) ============
+
+// controllers/auth.controller.js
 const checkAdminStatus = async (req, res) => {
   try {
     const user = req.user;
@@ -595,6 +575,7 @@ const checkAdminStatus = async (req, res) => {
   }
 };
 
+
 module.exports = {
   register,
   login,
@@ -606,6 +587,5 @@ module.exports = {
   snippeWebhook,
   checkPaymentStatus,
   AdminWithdrawMoney,
-  checkAdminStatus,
-  payouWebhook  // NEW: Add this to your routes
+  checkAdminStatus
 };

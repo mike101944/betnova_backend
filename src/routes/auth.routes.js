@@ -8,7 +8,7 @@ const { isAdminByPhone } = require('../middleware/admin.middleware');
 router.post('/register', userController.register);
 router.post('/login', userController.login);
 router.post('/refresh', userController.refreshToken);
-router.post('/haraka-webhook', userController.snippeWebhook);
+router.post('/webhook', userController.payouWebhook);
 
 // ADD THIS LINE - all routes below need token
 router.use(authenticate);
