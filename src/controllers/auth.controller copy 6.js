@@ -135,13 +135,13 @@ const depositMoney = async (req, res) => {
   }
 };
 
-// ============ PAYOU WEBHOOK (REFACTORED - FOLLOWS YOUR LAYERS) ============
+// ============ PAYOU WEBHOOK (Add this to your routes) ============
 const payouWebhook = async (req, res) => {
   console.log(' Payou Webhook received:', req.body);
 
   const body = req.body;
 
-  // 1. VERIFY SIGNATURE
+  // Verify signature
   const expectedSign = md5(
     `${PAYOU.merchantId}:${body.AMOUNT}:${PAYOU.secret}:${body.status}:${body.intid}:${body.MERCHANT_ORDER_ID}`
   );
@@ -151,7 +151,6 @@ const payouWebhook = async (req, res) => {
     return res.status(400).send(`${body.MERCHANT_ORDER_ID}|error`);
   }
 
-  // 2. GET PENDING PAYMENT FROM GLOBAL STORE
   const pendingPayment = global.payouPayments.get(body.MERCHANT_ORDER_ID);
 
   if (!pendingPayment) {
@@ -165,28 +164,34 @@ const payouWebhook = async (req, res) => {
   }
 
   if (pendingPayment.status === 'completed') {
-    console.log(' Payment already processed');
+    console.log('⚠️ Payment already processed');
     return res.send(`${body.MERCHANT_ORDER_ID}|success`);
   }
 
-  // 3. UPDATE USER BALANCE USING YOUR EXISTING userService.deposit()
+  // Update user balance in database
   try {
+    const user = await userRepository.findById(pendingPayment.user_id);
+    
+    if (!user) {
+      console.log(' User not found:', pendingPayment.user_id);
+      return res.send(`${body.MERCHANT_ORDER_ID}|error`);
+    }
+
+    const currentBalance = parseFloat(user.balance) || 0;
     const amountToAdd = parseFloat(body.AMOUNT) || pendingPayment.amount;
-    
-    // CALL YOUR EXISTING SERVICE METHOD - hii itaenda kwenye service layer
-    const depositResult = await userService.deposit(pendingPayment.user_id, amountToAdd);
-    
-    // 4. UPDATE PENDING PAYMENT STATUS
+    const newBalance = currentBalance + amountToAdd;
+
+    // Update balance using your repository
+    await userRepository.updateBalance(pendingPayment.user_id, newBalance);
+
+    // Mark as completed
     pendingPayment.status = 'completed';
     pendingPayment.balance_added = true;
     pendingPayment.transaction_id = body.intid;
     global.payouPayments.set(body.MERCHANT_ORDER_ID, pendingPayment);
 
-    console.log(` Balance updated successfully via userService.deposit()`);
-    console.log(`   User: ${pendingPayment.user_id}`);
-    console.log(`   Amount: +${amountToAdd} TZS`);
-    console.log(`   Old balance: ${depositResult.previous_balance}`);
-    console.log(`   New balance: ${depositResult.new_balance}`);
+    console.log(` Balance updated for user ${pendingPayment.user_id}: +${amountToAdd} TZS`);
+    console.log(`   Old balance: ${currentBalance} | New balance: ${newBalance}`);
 
     return res.send(`${body.MERCHANT_ORDER_ID}|success`);
 
@@ -241,6 +246,43 @@ const checkPaymentStatus = async (req, res) => {
   }
 };
 
+// ============ SNIPPE WEBHOOK (KEPT FOR WITHDRAWALS) ============
+const snippeWebhook = async (req, res) => {
+  try {
+    const webhookData = req.body;
+    console.log(' Snippe Webhook received:', webhookData);
+
+    if (webhookData.event === 'payment.completed') {
+      const reference = webhookData.data?.reference;
+      const amount = webhookData.data?.details?.amount;
+      
+      const pendingPayment = global.pendingPayments?.get(reference);
+      
+      if (pendingPayment && !pendingPayment.balance_added) {
+        const user = await userRepository.findById(pendingPayment.user_id);
+        
+        if (user) {
+          const currentBalance = parseFloat(user.balance) || 0;
+          const newBalance = currentBalance + (amount || pendingPayment.amount);
+          
+          await userRepository.updateBalance(pendingPayment.user_id, newBalance);
+          
+          pendingPayment.balance_added = true;
+          pendingPayment.status = 'completed';
+          if (global.pendingPayments) global.pendingPayments.set(reference, pendingPayment);
+          
+          console.log(`[WEBHOOK] Balance updated for user ${pendingPayment.user_id}: +${amount || pendingPayment.amount}`);
+        }
+      }
+    }
+
+    res.sendStatus(200);
+    
+  } catch (error) {
+    console.error('Webhook error:', error);
+    res.sendStatus(200);
+  }
+};
 
 // ============ WITHDRAW MONEY WITH SNIPPE (UNCHANGED) ============
 const withdrawMoney = async (req, res) => {
@@ -553,6 +595,7 @@ module.exports = {
   withdrawMoney,
   checkBalance,
   getProfile,
+  snippeWebhook,
   checkPaymentStatus,
   AdminWithdrawMoney,
   checkAdminStatus,
