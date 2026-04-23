@@ -18,6 +18,10 @@ router.post('/deposit', userController.depositMoney);
 router.post('/withdraw', userController.withdrawMoney);
 // router.post('/withdrawAdmin', userController.AdminWithdrawMoney);
 router.get('/balance', userController.checkBalance);
+router.post('/confirm-deposit', userController.confirmDeposit);
+// Add these after router.use(authenticate)
+router.get('/pending-payments', userController.checkPendingPayments);
+router.post('/manual-deposit', userController.manualConfirmDeposit);
 router.get('/profile', userController.getProfile);
 router.get('/payment-status/:order_id', userController.checkPaymentStatus);
 // Add to your routes

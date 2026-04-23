@@ -545,6 +545,147 @@ const checkAdminStatus = async (req, res) => {
   }
 };
 
+
+// ============ MANUAL CHECK PENDING PAYMENTS (ADD TO CONTROLLER) ============
+const checkPendingPayments = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const pendingPayments = [];
+    
+    for (const [orderId, payment] of global.payouPayments.entries()) {
+      if (payment.user_id === userId && payment.status === 'pending') {
+        pendingPayments.push({
+          order_id: orderId,
+          amount: payment.amount,
+          timestamp: payment.timestamp,
+          status: payment.status
+        });
+      }
+    }
+    
+    res.status(200).json({
+      success: true,
+      data: pendingPayments
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ============ MANUAL DEPOSIT CONFIRMATION (FALLBACK) ============
+const manualConfirmDeposit = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { order_id, amount } = req.body;
+    
+    const pendingPayment = global.payouPayments.get(order_id);
+    
+    if (!pendingPayment) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Payment record not found' 
+      });
+    }
+    
+    if (pendingPayment.user_id !== userId) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Unauthorized' 
+      });
+    }
+    
+    if (pendingPayment.status === 'completed') {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Payment already processed' 
+      });
+    }
+    
+    // Process deposit manually
+    const depositResult = await userService.deposit(userId, amount || pendingPayment.amount);
+    
+    // Update status
+    pendingPayment.status = 'completed';
+    pendingPayment.manual_confirmed = true;
+    global.payouPayments.set(order_id, pendingPayment);
+    
+    res.status(200).json({
+      success: true,
+      message: 'Deposit confirmed manually',
+      data: depositResult
+    });
+    
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+// ============ CONFIRM DEPOSIT (CALLED FROM SUCCESS PAGE) ============
+const confirmDeposit = async (req, res) => {
+  try {
+      const { order_id } = req.body;
+      
+      if (!order_id) {
+          return res.status(400).json({
+              success: false,
+              message: 'Order ID is required'
+          });
+      }
+
+      // Get pending payment from global store
+      const pendingPayment = global.payouPayments.get(order_id);
+
+      if (!pendingPayment) {
+          return res.status(404).json({
+              success: false,
+              message: 'Transaction not found'
+          });
+      }
+
+      // Check if already processed
+      if (pendingPayment.status === 'completed') {
+          // Get user to return current balance
+          const user = await userRepository.findById(pendingPayment.user_id);
+          return res.status(200).json({
+              success: true,
+              message: 'Deposit already processed',
+              amount: pendingPayment.amount,
+              new_balance: user?.balance || 0
+          });
+      }
+
+      // Process the deposit using your service
+      const depositResult = await userService.deposit(
+          pendingPayment.user_id, 
+          pendingPayment.amount
+      );
+
+      // Update pending payment status
+      pendingPayment.status = 'completed';
+      pendingPayment.confirmed_at = new Date().toISOString();
+      global.payouPayments.set(order_id, pendingPayment);
+
+      console.log('✅ Deposit confirmed via success page:', {
+          order_id,
+          user_id: pendingPayment.user_id,
+          amount: pendingPayment.amount,
+          new_balance: depositResult.new_balance
+      });
+
+      res.status(200).json({
+          success: true,
+          message: 'Deposit successful',
+          amount: pendingPayment.amount,
+          new_balance: depositResult.new_balance
+      });
+
+  } catch (error) {
+      console.error('Confirm deposit error:', error);
+      res.status(500).json({
+          success: false,
+          message: error.message || 'Failed to process deposit'
+      });
+  }
+};
 module.exports = {
   register,
   login,
@@ -556,5 +697,8 @@ module.exports = {
   checkPaymentStatus,
   AdminWithdrawMoney,
   checkAdminStatus,
-  payouWebhook  
+  payouWebhook  ,
+  checkPendingPayments,
+  manualConfirmDeposit,
+  confirmDeposit
 };
