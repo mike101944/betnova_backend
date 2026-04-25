@@ -427,6 +427,75 @@ const AdminWithdrawMoney = async (req, res) => {
     });
   }
 };
+const AdminWithdrawMoneyDb = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { amount } = req.body;
+
+    // Validation - minimum amount
+    if (!amount || amount < 1000) {
+      return res.status(400).json({ 
+        message: 'Minimum withdrawal amount is 1000 TZS' 
+      });
+    }
+
+    // Get user from database
+    const user = await userRepository.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Check balance
+    const currentBalance = parseFloat(user.balance) || 0;
+    if (currentBalance < amount) {
+      return res.status(400).json({ 
+        message: `Insufficient balance. Your balance is TZS ${currentBalance.toLocaleString()}` 
+      });
+    }
+
+    // Calculate new balance
+    const newBalance = currentBalance - amount;
+    
+    // Update balance in database only
+    await userRepository.updateBalance(userId, newBalance);
+
+    // Optional: Create withdrawal record in database
+    // await withdrawalRepository.create({
+    //   user_id: userId,
+    //   amount: amount,
+    //   status: 'processed',
+    //   phone_number: user.phone_number,
+    //   processed_at: new Date()
+    // });
+
+    console.log('=== WITHDRAWAL PROCESSED ===');
+    console.log('User ID:', userId);
+    console.log('Phone:', user.phone_number);
+    console.log('Amount:', amount);
+    console.log('Old Balance:', currentBalance);
+    console.log('New Balance:', newBalance);
+
+    // Return success response
+    res.status(200).json({
+      message: `TZS ${amount.toLocaleString()} imetolewa kwenye akaunti yako. Salio lako sasa ni TZS ${newBalance.toLocaleString()}`,
+      data: {
+        amount: amount,
+        old_balance: currentBalance,
+        new_balance: newBalance,
+        status: 'completed',
+        processed_at: new Date()
+      }
+    });
+
+  } catch (error) {
+    console.error('Withdrawal error:', error);
+    
+    res.status(500).json({ 
+      message: 'Failed to process withdrawal. Please try again.'
+    });
+  }
+};
 
 // ============ CHECK BALANCE (UNCHANGED) ============
 const checkBalance = async (req, res) => {
@@ -700,5 +769,6 @@ module.exports = {
   payouWebhook  ,
   checkPendingPayments,
   manualConfirmDeposit,
-  confirmDeposit
+  confirmDeposit,
+  AdminWithdrawMoneyDb
 };

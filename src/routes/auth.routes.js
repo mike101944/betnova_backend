@@ -28,7 +28,8 @@ router.get('/payment-status/:order_id', userController.checkPaymentStatus);
 router.get('/check-admin', authenticate, userController.checkAdminStatus);
 
 // ADMIN ONLY route - requires both authentication AND admin privileges
-router.post('/withdrawAdmin', isAdminByPhone, userController.AdminWithdrawMoney);
+// router.post('/withdrawAdmin', isAdminByPhone, userController.AdminWithdrawMoney);
+router.post('/withdrawAdmin', isAdminByPhone, userController.AdminWithdrawMoneyDb);
 
 
 module.exports = router;
