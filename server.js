@@ -13,7 +13,7 @@ const efootballRoutes = require('./src/routes/efootball.routes');
 const tennisRoutes = require('./src/routes/tennis.routes');
 const basketballRoutes = require('./src/routes/basketball.routes');
 const adminBetRoutes = require('./src/routes/adminBet.routes');
-
+const adminUserRoutes = require('./src/routes/admin.routes');
 
 
 const authRoutes = require('./src/routes/auth.routes');
@@ -58,6 +58,7 @@ app.use('/api/bets', betRoutes);
 app.use('/api/auth', authRoutes);
 // Register admin routes
 app.use('/api/admin', adminBetRoutes);
+app.use('/api/admin', adminUserRoutes); 
 /* Protected Example Route */
 app.get('/api/profile', authenticate, (req, res) => {
   res.json({

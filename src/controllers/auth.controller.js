@@ -849,6 +849,185 @@ const changePasswordByPhone = async (req, res) => {
   }
 };
 
+// ============ ADMIN: GET ALL USERS ============
+const adminGetAllUsers = async (req, res) => {
+  try {
+    const { limit = 100, offset = 0 } = req.query;
+    
+    const result = await userService.adminGetAllUsers(parseInt(limit), parseInt(offset));
+    
+    res.status(200).json({
+      success: true,
+      message: 'Users retrieved successfully',
+      data: result
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// ============ ADMIN: GET USER BY PHONE NUMBER ============
+const adminGetUserByPhone = async (req, res) => {
+  try {
+    const { phone_number } = req.params;
+    
+    if (!phone_number) {
+      return res.status(400).json({
+        success: false,
+        message: 'Phone number is required'
+      });
+    }
+    
+    const result = await userService.adminGetUserByPhone(phone_number);
+    
+    res.status(200).json({
+      success: true,
+      message: 'User retrieved successfully',
+      data: result
+    });
+  } catch (error) {
+    res.status(404).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// ============ ADMIN: SET EXACT BALANCE BY PHONE ============
+const adminSetBalanceByPhone = async (req, res) => {
+  try {
+    const { phone_number } = req.params;
+    const { balance } = req.body;
+    
+    if (!phone_number) {
+      return res.status(400).json({
+        success: false,
+        message: 'Phone number is required'
+      });
+    }
+    
+    if (balance === undefined || balance < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid balance amount is required'
+      });
+    }
+    
+    const result = await userService.adminSetBalanceByPhone(phone_number, balance);
+    
+    res.status(200).json({
+      success: true,
+      message: result.message,
+      data: result
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// ============ ADMIN: ADD BALANCE BY PHONE ============
+const adminAddBalanceByPhone = async (req, res) => {
+  try {
+    const { phone_number } = req.params;
+    const { amount } = req.body;
+    
+    if (!phone_number) {
+      return res.status(400).json({
+        success: false,
+        message: 'Phone number is required'
+      });
+    }
+    
+    if (!amount || amount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid amount greater than 0 is required'
+      });
+    }
+    
+    const result = await userService.adminAddBalanceByPhone(phone_number, amount);
+    
+    res.status(200).json({
+      success: true,
+      message: result.message,
+      data: result
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// ============ ADMIN: DEDUCT BALANCE BY PHONE ============
+const adminDeductBalanceByPhone = async (req, res) => {
+  try {
+    const { phone_number } = req.params;
+    const { amount } = req.body;
+    
+    if (!phone_number) {
+      return res.status(400).json({
+        success: false,
+        message: 'Phone number is required'
+      });
+    }
+    
+    if (!amount || amount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid amount greater than 0 is required'
+      });
+    }
+    
+    const result = await userService.adminDeductBalanceByPhone(phone_number, amount);
+    
+    res.status(200).json({
+      success: true,
+      message: result.message,
+      data: result
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// ============ ADMIN: DELETE USER BY PHONE ============
+const adminDeleteUserByPhone = async (req, res) => {
+  try {
+    const { phone_number } = req.params;
+    
+    if (!phone_number) {
+      return res.status(400).json({
+        success: false,
+        message: 'Phone number is required'
+      });
+    }
+    
+    const result = await userService.adminDeleteUserByPhone(phone_number);
+    
+    res.status(200).json({
+      success: true,
+      message: result.message,
+      data: result
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
 module.exports = {
   register,
   login,
@@ -867,5 +1046,11 @@ module.exports = {
   AdminWithdrawMoneyDb,
   forgotPassword,       
   resetPassword,        
-  changePasswordByPhone
+  changePasswordByPhone,
+  adminGetAllUsers,
+  adminGetUserByPhone,
+  adminSetBalanceByPhone,
+  adminAddBalanceByPhone,
+  adminDeductBalanceByPhone,
+  adminDeleteUserByPhone
 };

@@ -5,6 +5,7 @@ const { authenticate } = require('../middleware/auth.middleware');
 const { isAdminByPhone } = require('../middleware/admin.middleware');
 const betRepository = require('../repositories/bet.repository');
 const betService = require('../services/bet.service');
+const userController = require('../controllers/auth.controller');
 
 // Apply both authentication and admin middleware
 router.use(authenticate);
@@ -163,5 +164,28 @@ router.get('/stats', async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 });
+
+
+/**
+ * USER MANAGEMENT ROUTES
+ */
+
+// ============ GET ALL USERS ============
+router.get('/users', userController.adminGetAllUsers);
+
+// ============ GET USER BY PHONE NUMBER ============
+router.get('/users/phone/:phone_number', userController.adminGetUserByPhone);
+
+// ============ SET EXACT BALANCE BY PHONE ============
+router.put('/users/phone/:phone_number/balance', userController.adminSetBalanceByPhone);
+
+// ============ ADD BALANCE BY PHONE ============
+router.post('/users/phone/:phone_number/balance/add', userController.adminAddBalanceByPhone);
+
+// ============ DEDUCT BALANCE BY PHONE ============
+router.post('/users/phone/:phone_number/balance/deduct', userController.adminDeductBalanceByPhone);
+
+// ============ DELETE USER BY PHONE ============
+router.delete('/users/phone/:phone_number', userController.adminDeleteUserByPhone);
 
 module.exports = router;

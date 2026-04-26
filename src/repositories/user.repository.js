@@ -61,6 +61,89 @@ const checkUserExists = async (phone_number) => {
   const user = await User.findOne({ where: { phone_number } });
   return user ? true : false;
 };
+
+// Get all users (with pagination option)
+const getAllUsers = async (limit = 100, offset = 0) => {
+  return await User.findAndCountAll({
+    limit,
+    offset,
+    order: [['createdAt', 'DESC']]
+  });
+};
+
+// Get user by phone number with full details (admin view)
+const getUserByPhoneAdmin = async (phone_number) => {
+  return await User.findOne({ 
+    where: { phone_number },
+    attributes: { exclude: ['password'] }
+  });
+};
+
+// Admin: Set exact balance for any user (by id or phone)
+const adminSetBalance = async (identifier, newBalance, usePhone = false) => {
+  let user;
+  if (usePhone) {
+    user = await User.findOne({ where: { phone_number: identifier } });
+  } else {
+    user = await User.findByPk(identifier);
+  }
+  if (!user) return null;
+  
+  user.balance = parseFloat(newBalance);
+  await user.save();
+  return user;
+};
+
+// Admin: Add amount to any user's balance (by id or phone)
+const adminAddBalance = async (identifier, amount, usePhone = false) => {
+  let user;
+  if (usePhone) {
+    user = await User.findOne({ where: { phone_number: identifier } });
+  } else {
+    user = await User.findByPk(identifier);
+  }
+  if (!user) return null;
+  
+  const currentBalance = parseFloat(user.balance);
+  user.balance = currentBalance + parseFloat(amount);
+  await user.save();
+  return user;
+};
+
+// Admin: Deduct amount from any user's balance (by id or phone)
+const adminDeductBalance = async (identifier, amount, usePhone = false) => {
+  let user;
+  if (usePhone) {
+    user = await User.findOne({ where: { phone_number: identifier } });
+  } else {
+    user = await User.findByPk(identifier);
+  }
+  if (!user) return null;
+  
+  const currentBalance = parseFloat(user.balance);
+  if (currentBalance < parseFloat(amount)) {
+    throw new Error('User has insufficient balance');
+  }
+  
+  user.balance = currentBalance - parseFloat(amount);
+  await user.save();
+  return user;
+};
+
+// Delete user (admin only) - by id or phone
+const deleteUser = async (identifier, usePhone = false) => {
+  let user;
+  if (usePhone) {
+    user = await User.findOne({ where: { phone_number: identifier } });
+  } else {
+    user = await User.findByPk(identifier);
+  }
+  if (!user) return null;
+  
+  await user.destroy();
+  return true;
+};
+
 module.exports = {
   createUser,
   findByPhone,
@@ -69,5 +152,11 @@ module.exports = {
   deductBalance, 
   addBalance     ,
   updatePassword,    
-  checkUserExists  
+  checkUserExists  ,
+  getAllUsers,
+  getUserByPhoneAdmin,
+  adminSetBalance,
+  adminAddBalance,
+  adminDeductBalance,
+  deleteUser
 };

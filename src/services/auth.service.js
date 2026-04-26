@@ -250,6 +250,134 @@ const changePasswordByPhone = async (phone_number, newPassword, confirmPassword)
   };
 };
 
+// Admin: Get all users
+const adminGetAllUsers = async (limit = 100, offset = 0) => {
+  const result = await userRepository.getAllUsers(limit, offset);
+  
+  return {
+    total: result.count,
+    users: result.rows.map(user => ({
+      id: user.id,
+      phone_number: user.phone_number,
+      balance: user.balance,
+      created_at: user.createdAt,
+      updated_at: user.updatedAt
+    }))
+  };
+};
+
+// Admin: Get user by phone number
+const adminGetUserByPhone = async (phone_number) => {
+  const user = await userRepository.getUserByPhoneAdmin(phone_number);
+  
+  if (!user) {
+    throw new Error('User not found');
+  }
+  
+  return {
+    id: user.id,
+    phone_number: user.phone_number,
+    balance: user.balance,
+    created_at: user.createdAt,
+    updated_at: user.updatedAt
+  };
+};
+
+// Admin: Set exact balance for any user (by phone)
+const adminSetBalanceByPhone = async (phone_number, newBalance) => {
+  // Validate amount
+  if (!newBalance || newBalance < 0) {
+    throw new Error('Invalid balance amount');
+  }
+  
+  const user = await userRepository.adminSetBalance(phone_number, newBalance, true);
+  
+  if (!user) {
+    throw new Error('User not found');
+  }
+  
+  return {
+    id: user.id,
+    phone_number: user.phone_number,
+    previous_balance: user.balance,
+    new_balance: newBalance,
+    message: `Balance set to ${newBalance}`
+  };
+};
+
+// Admin: Add balance to user (by phone)
+const adminAddBalanceByPhone = async (phone_number, amount) => {
+  // Validate amount
+  if (!amount || amount <= 0) {
+    throw new Error('Invalid amount');
+  }
+  
+  const user = await userRepository.adminAddBalance(phone_number, amount, true);
+  
+  if (!user) {
+    throw new Error('User not found');
+  }
+  
+  const currentBalance = parseFloat(user.balance);
+  const addedAmount = parseFloat(amount);
+  
+  return {
+    id: user.id,
+    phone_number: user.phone_number,
+    previous_balance: currentBalance - addedAmount,
+    added_amount: addedAmount,
+    new_balance: currentBalance,
+    message: `Added ${amount} successfully`
+  };
+};
+
+// Admin: Deduct balance from user (by phone)
+const adminDeductBalanceByPhone = async (phone_number, amount) => {
+  // Validate amount
+  if (!amount || amount <= 0) {
+    throw new Error('Invalid amount');
+  }
+  
+  try {
+    const user = await userRepository.adminDeductBalance(phone_number, amount, true);
+    
+    if (!user) {
+      throw new Error('User not found');
+    }
+    
+    const currentBalance = parseFloat(user.balance);
+    const deductedAmount = parseFloat(amount);
+    
+    return {
+      id: user.id,
+      phone_number: user.phone_number,
+      previous_balance: currentBalance + deductedAmount,
+      deducted_amount: deductedAmount,
+      new_balance: currentBalance,
+      message: `Deducted ${amount} successfully`
+    };
+  } catch (error) {
+    if (error.message === 'User has insufficient balance') {
+      throw new Error('User has insufficient balance');
+    }
+    throw error;
+  }
+};
+
+// Admin: Delete user (by phone)
+const adminDeleteUserByPhone = async (phone_number) => {
+  const result = await userRepository.deleteUser(phone_number, true);
+  
+  if (!result) {
+    throw new Error('User not found');
+  }
+  
+  return {
+    success: true,
+    message: `User with phone ${phone_number} deleted successfully`
+  };
+};
+
 
 
 module.exports = {
@@ -263,5 +391,11 @@ module.exports = {
   getProfile,
   forgotPasswordRequest, 
   resetPassword,          
-  changePasswordByPhone 
+  changePasswordByPhone ,
+  adminGetAllUsers,
+  adminGetUserByPhone,
+  adminSetBalanceByPhone,
+  adminAddBalanceByPhone,
+  adminDeductBalanceByPhone,
+  adminDeleteUserByPhone
 };
