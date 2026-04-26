@@ -172,6 +172,83 @@ const getProfile = async (userId) => {
   };
 };
 
+const forgotPasswordRequest = async (phone_number) => {
+  // Check if user exists with this phone number
+  const user = await userRepository.findByPhone(phone_number);
+  
+  if (!user) {
+    throw new Error('Phone number not found');
+  }
+
+  // Return success without revealing if user exists (security)
+  return {
+    success: true,
+    message: 'If phone number exists, you can reset your password',
+    userId: user.id // This will be used for reset
+  };
+};
+
+const resetPassword = async (userId, newPassword, confirmPassword) => {
+  // Check if passwords match
+  if (newPassword !== confirmPassword) {
+    throw new Error('Passwords do not match');
+  }
+
+  // Validate password strength (minimum length)
+  if (!newPassword || newPassword.length < 4) {
+    throw new Error('Password must be at least 4 characters');
+  }
+
+  // Check if user exists
+  const user = await userRepository.findById(userId);
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  // Hash the new password
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+  // Update password
+  const updatedUser = await userRepository.updatePassword(userId, hashedPassword);
+
+  return {
+    success: true,
+    message: 'Password reset successfully',
+    phone_number: updatedUser.phone_number
+  };
+};
+
+// Alternative: Single function that handles both steps
+const changePasswordByPhone = async (phone_number, newPassword, confirmPassword) => {
+  // First check if user exists
+  const user = await userRepository.findByPhone(phone_number);
+  
+  if (!user) {
+    throw new Error('Phone number not found');
+  }
+
+  // Check if passwords match
+  if (newPassword !== confirmPassword) {
+    throw new Error('Passwords do not match');
+  }
+
+  // Validate password strength
+  if (!newPassword || newPassword.length < 4) {
+    throw new Error('Password must be at least 4 characters');
+  }
+
+  // Hash the new password
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+  // Update password
+  const updatedUser = await userRepository.updatePassword(user.id, hashedPassword);
+
+  return {
+    success: true,
+    message: 'Password changed successfully',
+    phone_number: updatedUser.phone_number
+  };
+};
 
 
 
@@ -183,5 +260,8 @@ module.exports = {
   deposit,
   withdraw,
   getBalance,
-  getProfile
+  getProfile,
+  forgotPasswordRequest, 
+  resetPassword,          
+  changePasswordByPhone 
 };

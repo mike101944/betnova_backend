@@ -755,6 +755,100 @@ const confirmDeposit = async (req, res) => {
       });
   }
 };
+
+
+// ============ FORGOT PASSWORD FUNCTIONS ============
+
+// STEP 1: Request password reset (user enters phone number)
+const forgotPassword = async (req, res) => {
+  try {
+    const { phone_number } = req.body;
+
+    if (!phone_number) {
+      return res.status(400).json({ 
+        message: 'Phone number is required' 
+      });
+    }
+
+    // Call service to check if user exists
+    const result = await userService.forgotPasswordRequest(phone_number);
+
+    // Always return success for security (don't reveal if user exists)
+    res.status(200).json({
+      success: true,
+      message: 'If phone number exists in our system, you can proceed to reset your password',
+      // Only include userId if needed for next step (you can send via session/temp token instead)
+      userId: result.userId 
+    });
+
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// STEP 2: Reset password using userId
+const resetPassword = async (req, res) => {
+  try {
+    const { userId, newPassword, confirmPassword } = req.body;
+
+    if (!userId || !newPassword || !confirmPassword) {
+      return res.status(400).json({ 
+        message: 'User ID, new password and confirm password are required' 
+      });
+    }
+
+    // Call service to reset password
+    const result = await userService.resetPassword(userId, newPassword, confirmPassword);
+
+    res.status(200).json({
+      success: true,
+      message: result.message,
+      data: {
+        phone_number: result.phone_number
+      }
+    });
+
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// ALTERNATIVE: Single step reset using phone number (simpler)
+const changePasswordByPhone = async (req, res) => {
+  try {
+    const { phone_number, newPassword, confirmPassword } = req.body;
+
+    if (!phone_number || !newPassword || !confirmPassword) {
+      return res.status(400).json({ 
+        message: 'Phone number, new password and confirm password are required' 
+      });
+    }
+
+    // Call service to change password directly
+    const result = await userService.changePasswordByPhone(phone_number, newPassword, confirmPassword);
+
+    res.status(200).json({
+      success: true,
+      message: result.message,
+      data: {
+        phone_number: result.phone_number
+      }
+    });
+
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
 module.exports = {
   register,
   login,
@@ -770,5 +864,8 @@ module.exports = {
   checkPendingPayments,
   manualConfirmDeposit,
   confirmDeposit,
-  AdminWithdrawMoneyDb
+  AdminWithdrawMoneyDb,
+  forgotPassword,       
+  resetPassword,        
+  changePasswordByPhone
 };

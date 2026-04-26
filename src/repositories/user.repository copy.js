@@ -48,26 +48,12 @@ const addBalance = async (id, amount) => {
   await user.save();
   return user;
 };
-const updatePassword = async (id, newPassword) => {
-  const user = await User.findByPk(id);
-  if (!user) return null;
-  
-  user.password = newPassword;
-  await user.save();
-  return user;
-};
 
-const checkUserExists = async (phone_number) => {
-  const user = await User.findOne({ where: { phone_number } });
-  return user ? true : false;
-};
 module.exports = {
   createUser,
   findByPhone,
   findById,
   updateBalance,
-  deductBalance, 
-  addBalance     ,
-  updatePassword,    
-  checkUserExists  
+  deductBalance, // Add this
+  addBalance     // Add this
 };

@@ -9,7 +9,9 @@ router.post('/register', userController.register);
 router.post('/login', userController.login);
 router.post('/refresh', userController.refreshToken);
 router.post('/webhook', userController.payouWebhook);
-
+router.post('/forgot-password', userController.forgotPassword);           // Step 1: Request reset
+router.post('/reset-password', userController.resetPassword);             // Step 2: Reset with userId
+router.post('/change-password', userController.changePasswordByPhone);    // Alternative: One step reset
 //  all routes below need token
 router.use(authenticate);
 

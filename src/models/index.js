@@ -1,10 +1,10 @@
 const sequelize = require('../config/database');
 const User = require('./user.model');
 const Bet = require('./bet.model');
-
+const PasswordReset = require('./password-reset.model');
 
 // Collect all models
-const models = { User, Bet };
+const models = { User, Bet,PasswordReset };
 
 // Initialize associations - Run associate methods if they exist
 Object.keys(models).forEach(modelName => {
@@ -31,5 +31,6 @@ module.exports = {
   sequelize,
   initModels,
   User,
-  Bet
+  Bet,
+  PasswordReset
 };
