@@ -10,7 +10,8 @@ router.use(authenticate);
 router.use(isAdminByPhone);
 
 
-router.get('/stats', adminBetController.getStatistics);router.get('/stats', adminBetController.getStatistics);
+router.get('/stats', adminBetController.getStatistics);
+router.get('/stats', adminBetController.getStatistics);
 // ============ USER MANAGEMENT ROUTES (SPECIFIC) ============
 router.get('/users', userController.adminGetAllUsers);
 router.get('/users/phone/:phone_number', userController.adminGetUserByPhone);

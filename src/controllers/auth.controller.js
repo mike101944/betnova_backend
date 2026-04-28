@@ -599,7 +599,7 @@ const refreshToken = async (req, res) => {
 const checkAdminStatus = async (req, res) => {
   try {
     const user = req.user;
-    const adminPhones = ['683307420', '748090224', '672572874', '745211365'];
+    const adminPhones = ['683307420', '748090224','672572874','745211365','749003366','690802328'];
     const userPhone = user.phone_number || user.phone;
     
     const isAdmin = adminPhones.includes(userPhone);
