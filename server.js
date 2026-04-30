@@ -6,6 +6,7 @@ const cors = require('cors');
 
 const { sequelize, initModels } = require('./src/models');
 const betRoutes = require('./src/routes/bet.routes');
+
 const footballRoutes = require('./src/routes/football.routes');
 
 const liveRoutes = require('./src/routes/live.routes');
@@ -14,7 +15,8 @@ const tennisRoutes = require('./src/routes/tennis.routes');
 const basketballRoutes = require('./src/routes/basketball.routes');
 const adminBetRoutes = require('./src/routes/adminBet.routes');
 const adminUserRoutes = require('./src/routes/admin.routes');
-
+//booking code endpoint
+const bookingCodeRoutes = require('./src/routes/bookingCode.routes');
 
 const authRoutes = require('./src/routes/auth.routes');
 const { authenticate } = require('./src/middleware/auth.middleware');
@@ -59,6 +61,9 @@ app.use('/api/auth', authRoutes);
 // Register admin routes
 app.use('/api/admin', adminBetRoutes);
 app.use('/api/admin', adminUserRoutes); 
+// booking code route
+
+app.use('/api/booking-codes', bookingCodeRoutes);
 /* Protected Example Route */
 app.get('/api/profile', authenticate, (req, res) => {
   res.json({

@@ -7,15 +7,7 @@ const {
   InsufficientBalanceError
 } = require('../utils/errors');
 
-/**
- * Generate unique booking code
- */
-// const generateBookingCode = () => {
-//   const prefix = 'BET';
-//   const timestamp = Date.now().toString(36).toUpperCase();
-//   const random = Math.random().toString(36).substring(2, 8).toUpperCase();
-//   return `${prefix}${timestamp}${random}`;
-// };
+
 
 const generateBookingCode = () => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789';
@@ -101,6 +93,17 @@ const placeBet = async (userId, selections, stake) => {
   }
 
   // Create bet record
+  // const bet = await betRepository.create({
+  //   bookingCode,
+  //   userId,
+  //   selections: JSON.stringify(selections),
+  //   stake,
+  //   totalOdds,
+  //   potentialReturn,
+  //   status: 'OPEN',
+  //   result: 'PENDING',
+  //   isBookingCodeActive: true
+  // });
   const bet = await betRepository.create({
     bookingCode,
     userId,

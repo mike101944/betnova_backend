@@ -5,7 +5,7 @@ const PasswordReset = require('./password-reset.model');
 const BookingCode = require('./bookingCode.model');
 
 // Collect all models
-const models = { User, Bet,PasswordReset ,BookingCode};
+const models = { User, Bet,PasswordReset };
 
 // Initialize associations - Run associate methods if they exist
 Object.keys(models).forEach(modelName => {
@@ -33,6 +33,5 @@ module.exports = {
   initModels,
   User,
   Bet,
-  PasswordReset,
-  BookingCode
+  PasswordReset
 };

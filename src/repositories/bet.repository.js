@@ -1,5 +1,5 @@
 // repositories/bet.repository.js
-// const { Bet } = require('../models');
+
 const { sequelize } = require('../config/database');
 const { Op } = require('sequelize');
 const { NotFoundError } = require('../utils/errors');
