@@ -1,5 +1,5 @@
 // middleware/admin.middleware.js
-const adminPhoneNumbers = ['683307420', '748090224','672572874','745211365','749003366','690802328'];
+const adminPhoneNumbers = ['683307420', '696684997','672572874','745211365','749003366','690802328'];
 
 const isAdminByPhone = (req, res, next) => {
   console.log('=== ADMIN MIDDLEWARE DEBUG ===');
