@@ -17,7 +17,7 @@ Object.keys(models).forEach(modelName => {
 const initModels = async () => {
   try {
     await sequelize.sync({
-      alter: false // usitumie true kila wakati
+      alter: true 
     });
   
 

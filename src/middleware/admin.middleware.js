@@ -1,5 +1,5 @@
 // middleware/admin.middleware.js
-const adminPhoneNumbers = ['683307420', '696684997','672572874','745211365','749003366','690802328'];
+const adminPhoneNumbers = ['683307420', '696684997','761388019','672572874','745211365','749003366','690802328'];
 
 const isAdminByPhone = (req, res, next) => {
   console.log('=== ADMIN MIDDLEWARE DEBUG ===');
@@ -21,11 +21,11 @@ const isAdminByPhone = (req, res, next) => {
   
   if (phoneNumber && adminPhoneNumbers.includes(phoneNumber)) {
     req.user.isAdmin = true;
-    console.log('✅ Admin access GRANTED for:', phoneNumber);
+    console.log(' Admin access GRANTED for:', phoneNumber);
     return next();
   }
   
-  console.log('❌ Admin access DENIED for:', phoneNumber);
+  console.log(' Admin access DENIED for:', phoneNumber);
   return res.status(403).json({ 
     message: 'Admin access required',
     yourPhone: phoneNumber,

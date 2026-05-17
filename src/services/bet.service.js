@@ -339,6 +339,7 @@ const approveBet = async (betId, resultStatus) => {
   bet.status = "SETTLED";
   bet.settledAt = new Date();
   bet.isBookingCodeActive = false;
+  bet.isWinningNotified = false;
 
   await bet.save();
 

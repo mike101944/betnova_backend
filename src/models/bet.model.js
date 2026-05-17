@@ -30,6 +30,10 @@ const Bet = sequelize.define('Bet', {
       key: 'id'
     }
   },
+  isWinningNotified: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
+  },
 
   // Bet details
   selections: {

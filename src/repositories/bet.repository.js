@@ -226,6 +226,19 @@ const bookingCodeExists = async (bookingCode) => {
   return !!bet;
 };
 
+
+const findUncheckedWins = async (userId) => {
+  return await Bet.findAll({
+    where: {
+      userId,
+      result: 'WON',
+      isWinningNotified: false  // ← unahitaji kuongeza column hii
+    },
+    order: [['settledAt', 'DESC']]
+  });
+};
+
+
 module.exports = {
   create,
   findById,
@@ -238,5 +251,6 @@ module.exports = {
   getUserBetStats,
   getBetWithUser,
   bookingCodeExists,
-  findAll
+  findAll,
+  findUncheckedWins
 };

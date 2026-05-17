@@ -374,6 +374,21 @@ const getUserBetStats = asyncHandler(async (req, res) => {
   });
 });
 
+const getUncheckedWins = asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+  
+  // Tafuta bets za user ambazo zimewon lakini hazijaangaliwa (isWinningNotified = false)
+  const unreadWins = await betRepository.findUncheckedWins(userId);
+  
+  res.json({
+    success: true,
+    data: {
+      hasUnreadWins: unreadWins.length > 0,
+      wins: unreadWins
+    }
+  });
+});
+
 module.exports = {
   placeBet,
   loadBetByBookingCode,
@@ -386,5 +401,6 @@ module.exports = {
   getBetById,
   cancelBet,
   getUserBetStats,
-  approveBetController
+  approveBetController,
+  getUncheckedWins
 };

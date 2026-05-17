@@ -13,7 +13,8 @@ const {
   getBetById,
   cancelBet,
   getUserBetStats,
-  approveBetController
+  approveBetController,
+  getUncheckedWins
 } = require('../controllers/bet.controller');
 const { authenticate } = require('../middleware/auth.middleware');
 
@@ -32,6 +33,7 @@ router.get('/check/:bookingCode', checkBookingCodeStatus);
 router.get('/preview/:bookingCode', previewBookingCode);
 router.get('/active/:bookingCode', loadActiveBetByCode);
 router.get('/load/:bookingCode', loadBetByBookingCode);
+router.get('/unchecked-wins', getUncheckedWins);
 
 // Bet management
 router.get('/:betId', getBetById);
