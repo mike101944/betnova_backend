@@ -5,17 +5,16 @@ const authenticate = (req, res, next) => {
   console.log('🔍 ===== AUTH MIDDLEWARE TRIGGERED =====');
   console.log('📌 Path:', req.path);
   console.log('📌 Method:', req.method);
-  
+
   const authHeader = req.headers.authorization;
   console.log('📨 Auth header present:', !!authHeader);
-  
+
   if (!authHeader) {
     console.log('❌ No authorization header found');
     return res.status(401).json({ message: 'Access token required' });
   }
 
   console.log('📨 Auth header format:', authHeader.substring(0, 20) + '...');
-  
   if (!authHeader.startsWith('Bearer ')) {
     console.log('❌ Auth header does not start with Bearer');
     return res.status(401).json({ message: 'Invalid authorization format' });

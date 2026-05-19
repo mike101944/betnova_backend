@@ -3,9 +3,9 @@ const User = require('./user.model');
 const Bet = require('./bet.model');
 const PasswordReset = require('./password-reset.model');
 const BookingCode = require('./bookingCode.model');
-
+const Notification = require('./notification.model');
 // Collect all models
-const models = { User, Bet,PasswordReset ,BookingCode};
+const models = { User, Bet,PasswordReset ,BookingCode,Notification};
 
 // Initialize associations - Run associate methods if they exist
 Object.keys(models).forEach(modelName => {
