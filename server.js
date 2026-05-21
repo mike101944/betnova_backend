@@ -35,7 +35,7 @@ const allowedOrigins = [
   'http://localhost:5173',   // local dev
   'http://localhost:5174',
   'http://192.168.213.184:5173/',
-  'https://www.betnover.com',
+  'https://www.vatesbet.com/',
   'http://www.betnover.com'
 ];
 app.use(helmet());
