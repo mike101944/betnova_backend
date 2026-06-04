@@ -90,7 +90,7 @@ app.get('/health', (req, res) => {
 const start = async () => {
   try {
     await sequelize.authenticate();
-    console.log('✅ Database connected successfully');
+    console.log(' Database connected successfully');
 
     await initModels();
     console.log('✅ Database models synchronized');
