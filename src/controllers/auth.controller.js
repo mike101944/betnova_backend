@@ -70,6 +70,7 @@ const depositMoney = async (req, res) => {
 
     // Get user from database
     const user = await userRepository.findById(userId);
+    //  here print user object 
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
