@@ -36,7 +36,7 @@ const allowedOrigins = [
   'http://localhost:5174',
   'http://192.168.213.184:5173',
   'https://www.vatesbet.com',
-  'http://www.vetisbet.com'
+  'https://www.vetisbet.com'
 ];
 app.use(helmet());
 app.use(cors({
