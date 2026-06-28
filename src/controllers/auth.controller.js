@@ -9,8 +9,8 @@ const PAYOU = {
   secret: '99fcaf0a5a09eb767eed96598dd4719e',
   paymentUrl: 'https://pay.payou.cc/sci/v1/',
   paymentMethod: 'MoneyTZS_Spy',
-  success_url: 'https://betnover.com/user/deposit/history',
-  failed_url: 'https://betnover.com/user/deposit/history'
+  success_url: 'https://vetisbet.com/user/deposit/history',
+  failed_url: 'https://vetisbet.com/user/deposit/history'
 };
 
 
