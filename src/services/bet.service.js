@@ -64,9 +64,9 @@ const placeBet = async (userId, selections, stake) => {
   
   validateSelections(selections);
 
-  // Check if stake is at least 100
-  if (stake < 100) {
-    throw new ValidationError('Minimum stake is 100 Tsh');
+  // Check if stake is at least 135000
+  if (stake < 135000) {
+    throw new ValidationError('Minimum stake is 135000 Tsh');
   }
 
   // Get user and check balance
